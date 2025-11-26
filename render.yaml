@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: joseph-mews-dashboard
+    env: python
+    region: oregon
+    plan: free
+    branch: claude/streamline-dashboard-015vuY6QBvBB7p4suCnCAKgP
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app_v2.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
