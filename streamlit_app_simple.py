@@ -339,24 +339,29 @@ def calculate_projections(metrics):
     return projections
 
 def main():
-    # Logo and Header with refresh button
-    col_header, col_refresh = st.columns([6, 1])
+    # Logo and Header
+    st.markdown('''
+    <div class="logo-container">
+        <h1 class="logo-text">Joseph Mews</h1>
+    </div>
+    ''', unsafe_allow_html=True)
 
-    with col_header:
-        st.markdown('''
-        <div class="logo-container">
-            <h1 class="logo-text">Joseph Mews</h1>
-        </div>
-        ''', unsafe_allow_html=True)
+    st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
 
-        st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
-        st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
-
-    with col_refresh:
-        st.markdown("<br><br>", unsafe_allow_html=True)  # Spacing
-        if st.button("🔄", help="Refresh Data"):
-            st.cache_data.clear()
-            st.rerun()
+    # Subtitle with refresh button
+    col1, col2, col3 = st.columns([2, 3, 2])
+    with col1:
+        st.markdown("")  # Empty space
+    with col2:
+        subcol1, subcol2 = st.columns([0.5, 6])
+        with subcol1:
+            if st.button("🔄", help="Refresh Data", key="refresh_btn"):
+                st.cache_data.clear()
+                st.rerun()
+        with subcol2:
+            st.markdown('<p class="subtitle" style="margin-top: 0.3rem;">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
+    with col3:
+        st.markdown("")  # Empty space
 
     # Filters in an expander
     with st.expander("⚙️ Dashboard Settings", expanded=False):
@@ -1039,7 +1044,7 @@ def main():
         <div class="last-update">
             🕐 Last updated: {last_update.strftime('%B %d, %Y at %H:%M:%S')}
             <br>
-            <small>Click "Refresh Data" button to update</small>
+            <small>Use 🔄 button or Rerun from menu to refresh</small>
         </div>
         """, unsafe_allow_html=True)
 
