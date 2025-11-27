@@ -222,16 +222,32 @@ def load_metrics_from_sheets(_client, spreadsheet_url):
     """Load metrics from Google Sheets - NO PERSONAL DATA"""
     try:
         sheet = _client.open_by_url(spreadsheet_url)
-        worksheet = sheet.worksheet("Metrics")
 
-        # Get all values
+        # Load current metrics
+        worksheet = sheet.worksheet("Metrics")
         data = worksheet.get_all_records()
         df = pd.DataFrame(data)
 
-        return df, datetime.now()
+        # Try to load daily data for trends
+        daily_df = None
+        try:
+            daily_worksheet = sheet.worksheet("Daily")
+            daily_data = daily_worksheet.get_all_records()
+            daily_df = pd.DataFrame(daily_data)
+
+            # Convert Date column to datetime
+            if 'Date' in daily_df.columns:
+                daily_df['Date'] = pd.to_datetime(daily_df['Date'], errors='coerce')
+                daily_df = daily_df.dropna(subset=['Date'])
+                daily_df = daily_df.sort_values('Date')
+        except:
+            # Daily sheet doesn't exist yet
+            pass
+
+        return df, daily_df, datetime.now()
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), None
+        return pd.DataFrame(), None, None
 
 def calculate_metrics(df):
     """Calculate sales funnel metrics"""
@@ -318,15 +334,17 @@ def main():
 
     # Filters in an expander
     with st.expander("⚙️ Dashboard Settings", expanded=False):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             show_funnel = st.checkbox("Show Funnel Chart", value=True)
-            show_insights = st.checkbox("Show Key Insights", value=True)
-            show_projections = st.checkbox("Show Projections", value=True)
+            show_trends = st.checkbox("Show Daily Trends", value=True)
 
         with col2:
+            show_projections = st.checkbox("Show Projections", value=True)
             show_bottleneck = st.checkbox("Show Bottleneck Analysis", value=True)
+
+        with col3:
             show_targets = st.checkbox("Show Performance Targets", value=True)
             show_pipeline = st.checkbox("Show Pipeline Health", value=True)
 
@@ -358,15 +376,14 @@ def main():
             st.error("Could not connect to Google Sheets. Please check credentials.")
             return
 
-        df, last_update = load_metrics_from_sheets(client, spreadsheet_url)
+        df, daily_df, last_update = load_metrics_from_sheets(client, spreadsheet_url)
 
     if df.empty:
         st.error("No data found. Check your Google Sheets and ensure 'Metrics' worksheet exists.")
         st.info("""
         **Expected Format:**
 
-        Worksheet name: **Metrics**
-
+        **Worksheet 1: Metrics** (Total numbers)
         | Stage | Count |
         |-------|-------|
         | Total Leads | 150 |
@@ -376,6 +393,12 @@ def main():
         | Offers Made | 15 |
         | Offers Accepted | 10 |
         | Closed Sales | 8 |
+
+        **Worksheet 2: Daily** (Optional - for trends)
+        | Date | Total Leads | Qualified Leads | Viewings Completed | Offers Made | Offers Accepted | Closed Sales |
+        |------|-------------|-----------------|-----------------------|-------------|-----------------|--------------|
+        | 2024-01-01 | 10 | 3 | 2 | 1 | 1 | 1 |
+        | 2024-01-02 | 15 | 5 | 3 | 2 | 1 | 1 |
         """)
         return
 
@@ -557,6 +580,163 @@ def main():
                 st.progress(percentage / 100)
                 st.markdown("")  # spacing
 
+    # Daily Trends
+    if show_trends and daily_df is not None and not daily_df.empty:
+        st.markdown("---")
+        st.subheader("📅 Daily Lead Trends")
+
+        # Date range filter
+        col1, col2, col3 = st.columns([2, 2, 3])
+
+        with col1:
+            min_date = daily_df['Date'].min().date()
+            max_date = daily_df['Date'].max().date()
+            start_date = st.date_input("From", value=min_date, min_value=min_date, max_value=max_date)
+
+        with col2:
+            end_date = st.date_input("To", value=max_date, min_value=min_date, max_value=max_date)
+
+        with col3:
+            st.markdown("##### Quick Filters")
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                if st.button("Last 7 Days"):
+                    start_date = max_date - pd.Timedelta(days=7)
+            with col_b:
+                if st.button("Last 30 Days"):
+                    start_date = max_date - pd.Timedelta(days=30)
+            with col_c:
+                if st.button("All Time"):
+                    start_date = min_date
+
+        # Filter data by date range
+        mask = (daily_df['Date'].dt.date >= start_date) & (daily_df['Date'].dt.date <= end_date)
+        filtered_daily = daily_df[mask]
+
+        if not filtered_daily.empty:
+            # Daily totals line chart
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### 📊 Daily Total Leads")
+
+                fig = go.Figure()
+
+                fig.add_trace(go.Scatter(
+                    x=filtered_daily['Date'],
+                    y=filtered_daily.get('Total Leads', [0] * len(filtered_daily)),
+                    mode='lines+markers',
+                    name='Total Leads',
+                    line=dict(color='#667eea', width=3),
+                    marker=dict(size=8),
+                    fill='tozeroy',
+                    fillcolor='rgba(102, 126, 234, 0.1)'
+                ))
+
+                fig.update_layout(
+                    height=350,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    xaxis_title="Date",
+                    yaxis_title="Leads",
+                    hovermode='x unified',
+                    showlegend=False
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Daily stats
+                total_period = filtered_daily.get('Total Leads', pd.Series([0])).sum()
+                avg_daily = filtered_daily.get('Total Leads', pd.Series([0])).mean()
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.metric("Total in Period", int(total_period))
+                with col_b:
+                    st.metric("Daily Average", f"{avg_daily:.1f}")
+
+            with col2:
+                st.markdown("#### 🎯 Daily Closed Sales")
+
+                fig = go.Figure()
+
+                fig.add_trace(go.Bar(
+                    x=filtered_daily['Date'],
+                    y=filtered_daily.get('Closed Sales', [0] * len(filtered_daily)),
+                    name='Closed Sales',
+                    marker=dict(
+                        color=filtered_daily.get('Closed Sales', [0] * len(filtered_daily)),
+                        colorscale='Greens',
+                        line=dict(color='white', width=1)
+                    )
+                ))
+
+                fig.update_layout(
+                    height=350,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    xaxis_title="Date",
+                    yaxis_title="Sales",
+                    hovermode='x unified',
+                    showlegend=False
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Sales stats
+                total_sales = filtered_daily.get('Closed Sales', pd.Series([0])).sum()
+                avg_sales = filtered_daily.get('Closed Sales', pd.Series([0])).mean()
+
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.metric("Total Sales", int(total_sales))
+                with col_b:
+                    st.metric("Daily Average", f"{avg_sales:.1f}")
+
+            # Multi-line funnel progression
+            st.markdown("#### 📈 Funnel Progression Over Time")
+
+            fig = go.Figure()
+
+            metrics_to_plot = [
+                ('Total Leads', '#667eea'),
+                ('Qualified Leads', '#764ba2'),
+                ('Viewings Completed', '#f093fb'),
+                ('Offers Made', '#4facfe'),
+                ('Closed Sales', '#43e97b')
+            ]
+
+            for metric_name, color in metrics_to_plot:
+                if metric_name in filtered_daily.columns:
+                    fig.add_trace(go.Scatter(
+                        x=filtered_daily['Date'],
+                        y=filtered_daily[metric_name],
+                        mode='lines+markers',
+                        name=metric_name,
+                        line=dict(color=color, width=2),
+                        marker=dict(size=6)
+                    ))
+
+            fig.update_layout(
+                height=400,
+                margin=dict(l=20, r=20, t=20, b=60),
+                xaxis_title="Date",
+                yaxis_title="Count",
+                hovermode='x unified',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.3,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("No data available for selected date range")
+
+    elif show_trends:
+        st.info("💡 **Add Daily Tracking:** Create a 'Daily' worksheet in your Google Sheets to see trends over time!")
+
     # Bottleneck Analysis
     if show_bottleneck and total > 0:
         st.markdown("---")
@@ -686,68 +866,6 @@ def main():
                 help=f"{metrics.get('Closed Sales', 0)} out of {total} leads"
             )
 
-    # Key Insights Section
-    if show_insights and total > 0:
-        st.markdown("---")
-        st.subheader("💡 Key Insights")
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            # Best performing stage
-            qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
-            viewing_conversion = (metrics.get('Viewings Completed', 0) / metrics.get('Qualified Leads', 1) * 100) if metrics.get('Qualified Leads', 0) > 0 else 0
-
-            st.markdown("""
-            <div class="comparison-box">
-                <h4>🎯 Lead Quality</h4>
-            """, unsafe_allow_html=True)
-
-            if qualified_rate > 30:
-                st.success(f"✅ Strong qualification rate at {qualified_rate:.1f}%")
-            elif qualified_rate > 20:
-                st.info(f"📊 Moderate qualification rate at {qualified_rate:.1f}%")
-            else:
-                st.warning(f"⚠️ Low qualification rate at {qualified_rate:.1f}%")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col2:
-            # Viewing to offer conversion
-            viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
-
-            st.markdown("""
-            <div class="comparison-box">
-                <h4>👁️ Viewing Performance</h4>
-            """, unsafe_allow_html=True)
-
-            if viewing_to_offer > 50:
-                st.success(f"✅ Excellent: {viewing_to_offer:.1f}% make offers")
-            elif viewing_to_offer > 30:
-                st.info(f"📊 Good: {viewing_to_offer:.1f}% make offers")
-            else:
-                st.warning(f"⚠️ Needs improvement: {viewing_to_offer:.1f}%")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col3:
-            # Offer acceptance rate
-            offer_acceptance = (metrics.get('Offers Accepted', 0) / metrics.get('Offers Made', 1) * 100) if metrics.get('Offers Made', 0) > 0 else 0
-
-            st.markdown("""
-            <div class="comparison-box">
-                <h4>✅ Offer Success</h4>
-            """, unsafe_allow_html=True)
-
-            if offer_acceptance > 60:
-                st.success(f"✅ High acceptance: {offer_acceptance:.1f}%")
-            elif offer_acceptance > 40:
-                st.info(f"📊 Moderate: {offer_acceptance:.1f}%")
-            else:
-                st.warning(f"⚠️ Low acceptance: {offer_acceptance:.1f}%")
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
     # Pipeline Health & Performance Targets
     if (show_pipeline or show_targets) and total > 0:
         st.markdown("---")
@@ -769,11 +887,10 @@ def main():
             with col2:
                 st.markdown("#### 🎯 Performance Targets")
 
-                # Need to recalculate these if not in insights section
-                if not show_insights:
-                    qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
-                    viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
-                    close_rate = (metrics.get('Closed Sales', 0) / total * 100) if total > 0 else 0
+                # Calculate rates
+                qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
+                viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
+                close_rate = (metrics.get('Closed Sales', 0) / total * 100) if total > 0 else 0
 
                 # Calculate if targets are being met (example thresholds)
                 targets = {
