@@ -16,7 +16,7 @@ except ImportError:
 
 # Page config
 st.set_page_config(
-    page_title="Joseph Mews - Sales Dashboard",
+    page_title="Joseph Mews Lead Funnel Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
