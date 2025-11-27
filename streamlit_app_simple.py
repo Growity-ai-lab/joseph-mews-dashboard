@@ -22,11 +22,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Auto-refresh every 30 seconds
-st_autorefresh = st.empty()
-with st_autorefresh:
-    time.sleep(0.1)
-
 # Custom CSS - Enhanced design
 st.markdown("""
 <style>
@@ -353,6 +348,13 @@ def main():
 
     st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
+
+    # Refresh button
+    col_refresh_left, col_refresh_center, col_refresh_right = st.columns([1, 1, 1])
+    with col_refresh_center:
+        if st.button("🔄 Refresh Data", use_container_width=True, type="primary"):
+            st.cache_data.clear()
+            st.rerun()
 
     # Filters in an expander
     with st.expander("⚙️ Dashboard Settings", expanded=False):
@@ -1035,7 +1037,7 @@ def main():
         <div class="last-update">
             🕐 Last updated: {last_update.strftime('%B %d, %Y at %H:%M:%S')}
             <br>
-            <small>Auto-refreshes every 30 seconds</small>
+            <small>Click "Refresh Data" button to update</small>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1047,10 +1049,6 @@ def main():
         Joseph Mews © 2024 • All Rights Reserved
     </div>
     """, unsafe_allow_html=True)
-
-    # Auto-refresh mechanism
-    time.sleep(30)
-    st.rerun()
 
 if __name__ == "__main__":
     main()
