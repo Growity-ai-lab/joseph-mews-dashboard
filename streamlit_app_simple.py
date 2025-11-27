@@ -254,10 +254,81 @@ def calculate_metrics(df):
 
     return metrics
 
+def calculate_bottleneck(metrics):
+    """Identify the biggest bottleneck in the funnel"""
+    conversion_stages = [
+        ('Lead → Qualified', metrics.get('Total Leads', 0), metrics.get('Qualified Leads', 0)),
+        ('Qualified → Viewing', metrics.get('Qualified Leads', 0), metrics.get('Viewings Completed', 0)),
+        ('Viewing → Offer', metrics.get('Viewings Completed', 0), metrics.get('Offers Made', 0)),
+        ('Offer → Accepted', metrics.get('Offers Made', 0), metrics.get('Offers Accepted', 0)),
+        ('Accepted → Closed', metrics.get('Offers Accepted', 0), metrics.get('Closed Sales', 0)),
+    ]
+
+    bottlenecks = []
+    for stage_name, from_count, to_count in conversion_stages:
+        if from_count > 0:
+            conversion_rate = (to_count / from_count) * 100
+            drop_off = from_count - to_count
+            bottlenecks.append({
+                'stage': stage_name,
+                'rate': conversion_rate,
+                'drop_off': drop_off,
+                'from': from_count,
+                'to': to_count
+            })
+
+    # Sort by conversion rate (lowest = biggest bottleneck)
+    bottlenecks.sort(key=lambda x: x['rate'])
+    return bottlenecks
+
+def calculate_projections(metrics):
+    """Calculate projected outcomes based on current conversion rates"""
+    total = metrics.get('Total Leads', 0)
+    if total == 0:
+        return {}
+
+    # Current rates
+    qual_rate = metrics.get('Qualified Leads', 0) / total
+    viewing_rate = metrics.get('Viewings Completed', 0) / total
+    offer_rate = metrics.get('Offers Made', 0) / total
+    close_rate = metrics.get('Closed Sales', 0) / total
+
+    # Projections for next 100 leads
+    projection_input = 100
+
+    projections = {
+        'input_leads': projection_input,
+        'projected_qualified': int(projection_input * qual_rate),
+        'projected_viewings': int(projection_input * viewing_rate),
+        'projected_offers': int(projection_input * offer_rate),
+        'projected_closed': int(projection_input * close_rate),
+        'current_close_rate': close_rate * 100
+    }
+
+    # What if scenarios
+    projections['if_qual_improves_10'] = int(projection_input * min(qual_rate * 1.1, 1.0) * close_rate / qual_rate) if qual_rate > 0 else 0
+    projections['if_viewing_improves_10'] = int(projection_input * close_rate / viewing_rate * min(viewing_rate * 1.1, 1.0)) if viewing_rate > 0 else 0
+
+    return projections
+
 def main():
     # Header
     st.markdown('<h1 class="main-header">Joseph Mews Sales Dashboard</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
+
+    # Filters in an expander
+    with st.expander("⚙️ Dashboard Settings", expanded=False):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            show_funnel = st.checkbox("Show Funnel Chart", value=True)
+            show_insights = st.checkbox("Show Key Insights", value=True)
+            show_projections = st.checkbox("Show Projections", value=True)
+
+        with col2:
+            show_bottleneck = st.checkbox("Show Bottleneck Analysis", value=True)
+            show_targets = st.checkbox("Show Performance Targets", value=True)
+            show_pipeline = st.checkbox("Show Pipeline Health", value=True)
 
     # Get Google Sheets URL from environment variable
     spreadsheet_url = os.getenv("GOOGLE_SHEETS_URL")
@@ -322,6 +393,13 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        # Drill-down detail
+        with st.expander("📊 View Details"):
+            total = metrics.get('Total Leads', 0)
+            qualified = metrics.get('Qualified Leads', 0)
+            st.write(f"**Qualified Rate:** {(qualified/total*100):.1f}%" if total > 0 else "No data")
+            st.write(f"**Not Qualified:** {total - qualified}" if total > 0 else "No data")
+
     with col2:
         st.markdown(f"""
         <div class="metric-card">
@@ -329,6 +407,13 @@ def main():
             <div class="metric-value">{metrics.get('Qualified Leads', 0)}</div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Drill-down detail
+        with st.expander("📊 View Details"):
+            qualified = metrics.get('Qualified Leads', 0)
+            viewings = metrics.get('Viewings Completed', 0)
+            st.write(f"**To Viewing Rate:** {(viewings/qualified*100):.1f}%" if qualified > 0 else "No data")
+            st.write(f"**Pending Viewings:** {qualified - viewings}" if qualified > 0 else "No data")
 
     with col3:
         st.markdown(f"""
@@ -338,6 +423,13 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        # Drill-down detail
+        with st.expander("📊 View Details"):
+            offers = metrics.get('Offers Made', 0)
+            accepted = metrics.get('Offers Accepted', 0)
+            st.write(f"**Acceptance Rate:** {(accepted/offers*100):.1f}%" if offers > 0 else "No data")
+            st.write(f"**Pending Offers:** {offers - accepted}" if offers > 0 else "No data")
+
     with col4:
         st.markdown(f"""
         <div class="metric-card">
@@ -345,6 +437,15 @@ def main():
             <div class="metric-value">{metrics.get('Closed Sales', 0)}</div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Drill-down detail
+        with st.expander("📊 View Details"):
+            total = metrics.get('Total Leads', 0)
+            closed = metrics.get('Closed Sales', 0)
+            close_rate = (closed / total * 100) if total > 0 else 0
+            st.write(f"**Overall Close Rate:** {close_rate:.1f}%")
+            st.write(f"**Average Value:** N/A (add to sheets)")
+            st.write(f"**Total Pipeline:** {total - closed} active")
 
     # Second row
     col1, col2, col3, col4 = st.columns(4)
@@ -385,11 +486,12 @@ def main():
         """, unsafe_allow_html=True)
 
     # Visual Funnel Chart
-    st.markdown("---")
-    st.subheader("📊 Sales Funnel Visualization")
+    if show_funnel:
+        st.markdown("---")
+        st.subheader("📊 Sales Funnel Visualization")
 
     total = metrics.get('Total Leads', 0)
-    if total > 0:
+    if total > 0 and show_funnel:
         # Create funnel data
         funnel_data = {
             'Stage': [
@@ -455,6 +557,91 @@ def main():
                 st.progress(percentage / 100)
                 st.markdown("")  # spacing
 
+    # Bottleneck Analysis
+    if show_bottleneck and total > 0:
+        st.markdown("---")
+        st.subheader("🔴 Bottleneck Analysis")
+
+        bottlenecks = calculate_bottleneck(metrics)
+
+        if bottlenecks:
+            # Highlight the biggest bottleneck
+            worst = bottlenecks[0]
+
+            col1, col2 = st.columns([2, 3])
+
+            with col1:
+                st.error(f"### 🚨 Critical Bottleneck")
+                st.markdown(f"""
+                **{worst['stage']}**
+                - Conversion Rate: **{worst['rate']:.1f}%**
+                - Drop-off: **{worst['drop_off']}** leads
+                - From: {worst['from']} → To: {worst['to']}
+                """)
+
+                # Recommendation
+                if worst['rate'] < 50:
+                    st.warning("⚠️ **Action Needed:** Focus improvement efforts here for maximum impact!")
+
+            with col2:
+                st.markdown("#### All Conversion Stages")
+
+                # Create bar chart for all stages
+                bottleneck_df = pd.DataFrame(bottlenecks)
+
+                fig = px.bar(
+                    bottleneck_df,
+                    x='rate',
+                    y='stage',
+                    orientation='h',
+                    color='rate',
+                    color_continuous_scale=['#ff4444', '#ffaa00', '#44ff44'],
+                    labels={'rate': 'Conversion Rate (%)', 'stage': 'Stage'},
+                    text='rate'
+                )
+
+                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                fig.update_layout(
+                    height=300,
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=20, b=20)
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+    # Projections & Forecasting
+    if show_projections and total > 0:
+        st.markdown("---")
+        st.subheader("🔮 Projections & Forecasting")
+
+        projections = calculate_projections(metrics)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### 📊 Next 100 Leads Projection")
+            st.markdown("*Based on current conversion rates*")
+
+            st.metric("Expected Qualified", projections['projected_qualified'])
+            st.metric("Expected Viewings", projections['projected_viewings'])
+            st.metric("Expected Offers", projections['projected_offers'])
+            st.metric("Expected Closed Sales", projections['projected_closed'],
+                     delta=f"{projections['current_close_rate']:.1f}% close rate")
+
+        with col2:
+            st.markdown("#### 🎯 What-If Scenarios")
+            st.markdown("*Impact of 10% improvement*")
+
+            current_closed = projections['projected_closed']
+
+            st.info(f"**If Qualification improves by 10%:**")
+            st.write(f"Closed Sales: {projections['if_qual_improves_10']} (+{projections['if_qual_improves_10'] - current_closed})")
+
+            st.info(f"**If Viewing Conversion improves by 10%:**")
+            st.write(f"Closed Sales: {projections['if_viewing_improves_10']} (+{projections['if_viewing_improves_10'] - current_closed})")
+
+            st.success("💡 **Tip:** Focus on the bottleneck stage for maximum ROI")
+
     # Conversion funnel section
     st.markdown("---")
     st.subheader("📈 Conversion Rates")
@@ -500,96 +687,106 @@ def main():
             )
 
     # Key Insights Section
-    st.markdown("---")
-    st.subheader("💡 Key Insights")
+    if show_insights and total > 0:
+        st.markdown("---")
+        st.subheader("💡 Key Insights")
 
-    col1, col2, col3 = st.columns(3)
+        col1, col2, col3 = st.columns(3)
 
-    with col1:
-        # Best performing stage
-        qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
-        viewing_conversion = (metrics.get('Viewings Completed', 0) / metrics.get('Qualified Leads', 1) * 100) if metrics.get('Qualified Leads', 0) > 0 else 0
+        with col1:
+            # Best performing stage
+            qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
+            viewing_conversion = (metrics.get('Viewings Completed', 0) / metrics.get('Qualified Leads', 1) * 100) if metrics.get('Qualified Leads', 0) > 0 else 0
 
-        st.markdown("""
-        <div class="comparison-box">
-            <h4>🎯 Lead Quality</h4>
-        """, unsafe_allow_html=True)
+            st.markdown("""
+            <div class="comparison-box">
+                <h4>🎯 Lead Quality</h4>
+            """, unsafe_allow_html=True)
 
-        if qualified_rate > 30:
-            st.success(f"✅ Strong qualification rate at {qualified_rate:.1f}%")
-        elif qualified_rate > 20:
-            st.info(f"📊 Moderate qualification rate at {qualified_rate:.1f}%")
-        else:
-            st.warning(f"⚠️ Low qualification rate at {qualified_rate:.1f}%")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col2:
-        # Viewing to offer conversion
-        viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
-
-        st.markdown("""
-        <div class="comparison-box">
-            <h4>👁️ Viewing Performance</h4>
-        """, unsafe_allow_html=True)
-
-        if viewing_to_offer > 50:
-            st.success(f"✅ Excellent: {viewing_to_offer:.1f}% make offers")
-        elif viewing_to_offer > 30:
-            st.info(f"📊 Good: {viewing_to_offer:.1f}% make offers")
-        else:
-            st.warning(f"⚠️ Needs improvement: {viewing_to_offer:.1f}%")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col3:
-        # Offer acceptance rate
-        offer_acceptance = (metrics.get('Offers Accepted', 0) / metrics.get('Offers Made', 1) * 100) if metrics.get('Offers Made', 0) > 0 else 0
-
-        st.markdown("""
-        <div class="comparison-box">
-            <h4>✅ Offer Success</h4>
-        """, unsafe_allow_html=True)
-
-        if offer_acceptance > 60:
-            st.success(f"✅ High acceptance: {offer_acceptance:.1f}%")
-        elif offer_acceptance > 40:
-            st.info(f"📊 Moderate: {offer_acceptance:.1f}%")
-        else:
-            st.warning(f"⚠️ Low acceptance: {offer_acceptance:.1f}%")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # Pipeline Health
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("#### 📊 Pipeline Health")
-        pipeline_stages = [
-            ("In Viewings", metrics.get('Viewings Scheduled', 0) + metrics.get('Viewings Completed', 0)),
-            ("In Negotiation", metrics.get('Offers Made', 0) + metrics.get('Offers Accepted', 0)),
-            ("Ready to Close", metrics.get('Offers Accepted', 0))
-        ]
-
-        for stage, count in pipeline_stages:
-            st.metric(stage, count)
-
-    with col2:
-        st.markdown("#### 🎯 Performance Targets")
-
-        # Calculate if targets are being met (example thresholds)
-        targets = {
-            "Qualification Rate": (qualified_rate, 30, "%"),
-            "Close Rate": (close_rate, 5, "%"),
-            "Viewing Conversion": (viewing_to_offer, 40, "%")
-        }
-
-        for metric_name, (value, target, unit) in targets.items():
-            if value >= target:
-                st.success(f"✅ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
+            if qualified_rate > 30:
+                st.success(f"✅ Strong qualification rate at {qualified_rate:.1f}%")
+            elif qualified_rate > 20:
+                st.info(f"📊 Moderate qualification rate at {qualified_rate:.1f}%")
             else:
-                st.error(f"❌ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
+                st.warning(f"⚠️ Low qualification rate at {qualified_rate:.1f}%")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with col2:
+            # Viewing to offer conversion
+            viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
+
+            st.markdown("""
+            <div class="comparison-box">
+                <h4>👁️ Viewing Performance</h4>
+            """, unsafe_allow_html=True)
+
+            if viewing_to_offer > 50:
+                st.success(f"✅ Excellent: {viewing_to_offer:.1f}% make offers")
+            elif viewing_to_offer > 30:
+                st.info(f"📊 Good: {viewing_to_offer:.1f}% make offers")
+            else:
+                st.warning(f"⚠️ Needs improvement: {viewing_to_offer:.1f}%")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with col3:
+            # Offer acceptance rate
+            offer_acceptance = (metrics.get('Offers Accepted', 0) / metrics.get('Offers Made', 1) * 100) if metrics.get('Offers Made', 0) > 0 else 0
+
+            st.markdown("""
+            <div class="comparison-box">
+                <h4>✅ Offer Success</h4>
+            """, unsafe_allow_html=True)
+
+            if offer_acceptance > 60:
+                st.success(f"✅ High acceptance: {offer_acceptance:.1f}%")
+            elif offer_acceptance > 40:
+                st.info(f"📊 Moderate: {offer_acceptance:.1f}%")
+            else:
+                st.warning(f"⚠️ Low acceptance: {offer_acceptance:.1f}%")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Pipeline Health & Performance Targets
+    if (show_pipeline or show_targets) and total > 0:
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+
+        if show_pipeline:
+            with col1:
+                st.markdown("#### 📊 Pipeline Health")
+                pipeline_stages = [
+                    ("In Viewings", metrics.get('Viewings Scheduled', 0) + metrics.get('Viewings Completed', 0)),
+                    ("In Negotiation", metrics.get('Offers Made', 0) + metrics.get('Offers Accepted', 0)),
+                    ("Ready to Close", metrics.get('Offers Accepted', 0))
+                ]
+
+                for stage, count in pipeline_stages:
+                    st.metric(stage, count)
+
+        if show_targets:
+            with col2:
+                st.markdown("#### 🎯 Performance Targets")
+
+                # Need to recalculate these if not in insights section
+                if not show_insights:
+                    qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
+                    viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
+                    close_rate = (metrics.get('Closed Sales', 0) / total * 100) if total > 0 else 0
+
+                # Calculate if targets are being met (example thresholds)
+                targets = {
+                    "Qualification Rate": (qualified_rate, 30, "%"),
+                    "Close Rate": (close_rate, 5, "%"),
+                    "Viewing Conversion": (viewing_to_offer, 40, "%")
+                }
+
+                for metric_name, (value, target, unit) in targets.items():
+                    if value >= target:
+                        st.success(f"✅ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
+                    else:
+                        st.error(f"❌ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
 
     # Last updated timestamp
     if last_update:
