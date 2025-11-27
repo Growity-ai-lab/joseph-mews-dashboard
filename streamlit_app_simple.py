@@ -339,20 +339,22 @@ def calculate_projections(metrics):
     return projections
 
 def main():
-    # Logo and Header
-    st.markdown('''
-    <div class="logo-container">
-        <h1 class="logo-text">Joseph Mews</h1>
-    </div>
-    ''', unsafe_allow_html=True)
+    # Logo and Header with refresh button
+    col_header, col_refresh = st.columns([6, 1])
 
-    st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
+    with col_header:
+        st.markdown('''
+        <div class="logo-container">
+            <h1 class="logo-text">Joseph Mews</h1>
+        </div>
+        ''', unsafe_allow_html=True)
 
-    # Refresh button
-    col_refresh_left, col_refresh_center, col_refresh_right = st.columns([1, 1, 1])
-    with col_refresh_center:
-        if st.button("🔄 Refresh Data", use_container_width=True, type="primary"):
+        st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
+
+    with col_refresh:
+        st.markdown("<br><br>", unsafe_allow_html=True)  # Spacing
+        if st.button("🔄", help="Refresh Data"):
             st.cache_data.clear()
             st.rerun()
 
