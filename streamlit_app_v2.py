@@ -48,32 +48,48 @@ def get_google_sheets_client():
     if not GOOGLE_SHEETS_AVAILABLE:
         return None
 
-    try:
-        # Try to get credentials from Streamlit secrets first (for Streamlit Cloud)
-        if "gcp_service_account" in st.secrets:
-            credentials_dict = st.secrets["gcp_service_account"]
-        # Fall back to environment variables (for Render, Railway, etc.)
-        else:
-            import os
-            import json
+    import os
+    import json
 
-            # Try JSON environment variable first
-            if os.getenv("GCP_SERVICE_ACCOUNT"):
-                credentials_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT"))
-            # Build from individual environment variables
-            else:
-                credentials_dict = {
-                    "type": os.getenv("GCP_SERVICE_ACCOUNT_TYPE", "service_account"),
-                    "project_id": os.getenv("GCP_SERVICE_ACCOUNT_PROJECT_ID"),
-                    "private_key_id": os.getenv("GCP_SERVICE_ACCOUNT_PRIVATE_KEY_ID"),
-                    "private_key": os.getenv("GCP_SERVICE_ACCOUNT_PRIVATE_KEY", "").replace("\\n", "\n"),
-                    "client_email": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_EMAIL"),
-                    "client_id": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_ID"),
-                    "auth_uri": os.getenv("GCP_SERVICE_ACCOUNT_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
-                    "token_uri": os.getenv("GCP_SERVICE_ACCOUNT_TOKEN_URI", "https://oauth2.googleapis.com/token"),
-                    "auth_provider_x509_cert_url": os.getenv("GCP_SERVICE_ACCOUNT_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
-                    "client_x509_cert_url": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_X509_CERT_URL")
-                }
+    credentials_dict = None
+
+    try:
+        # Try environment variables first (for Render, Railway, etc.)
+        if os.getenv("GCP_SERVICE_ACCOUNT"):
+            # Single JSON environment variable
+            credentials_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT"))
+        elif os.getenv("GCP_SERVICE_ACCOUNT_PROJECT_ID"):
+            # Individual environment variables
+            credentials_dict = {
+                "type": os.getenv("GCP_SERVICE_ACCOUNT_TYPE", "service_account"),
+                "project_id": os.getenv("GCP_SERVICE_ACCOUNT_PROJECT_ID"),
+                "private_key_id": os.getenv("GCP_SERVICE_ACCOUNT_PRIVATE_KEY_ID"),
+                "private_key": os.getenv("GCP_SERVICE_ACCOUNT_PRIVATE_KEY", "").replace("\\n", "\n"),
+                "client_email": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_EMAIL"),
+                "client_id": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_ID"),
+                "auth_uri": os.getenv("GCP_SERVICE_ACCOUNT_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
+                "token_uri": os.getenv("GCP_SERVICE_ACCOUNT_TOKEN_URI", "https://oauth2.googleapis.com/token"),
+                "auth_provider_x509_cert_url": os.getenv("GCP_SERVICE_ACCOUNT_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
+                "client_x509_cert_url": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_X509_CERT_URL")
+            }
+        else:
+            # Try Streamlit secrets (for Streamlit Cloud)
+            try:
+                if "gcp_service_account" in st.secrets:
+                    credentials_dict = st.secrets["gcp_service_account"]
+            except:
+                pass
+
+        if not credentials_dict:
+            st.error("Google Sheets credentials not found. Please configure environment variables or Streamlit secrets.")
+            st.info("""
+            **For Render deployment:**
+            Add `GCP_SERVICE_ACCOUNT` environment variable with your service account JSON.
+
+            **For Streamlit Cloud:**
+            Add credentials to `.streamlit/secrets.toml` file.
+            """)
+            return None
 
         credentials = Credentials.from_service_account_info(
             credentials_dict,
