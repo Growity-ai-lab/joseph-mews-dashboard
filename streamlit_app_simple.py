@@ -351,7 +351,7 @@ def main():
     </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown('<h2 class="main-header">Sales Dashboard</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
 
     # Filters in an expander
