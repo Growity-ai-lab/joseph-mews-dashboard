@@ -4,6 +4,8 @@ import os
 import json
 from datetime import datetime
 import time
+import plotly.graph_objects as go
+import plotly.express as px
 
 try:
     import gspread
@@ -116,6 +118,53 @@ st.markdown("""
     /* Loading animation */
     .stSpinner > div {
         border-top-color: #667eea !important;
+    }
+
+    /* Progress bars styling */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    /* Download button */
+    .download-section {
+        text-align: center;
+        margin: 2rem 0;
+    }
+
+    .download-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.8rem 2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        display: inline-block;
+        font-weight: 600;
+        transition: transform 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+
+    .download-btn:hover {
+        transform: scale(1.05);
+    }
+
+    /* Metric comparison */
+    .comparison-box {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        border-left: 3px solid #667eea;
+    }
+
+    /* Animation for metrics */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .metric-card {
+        animation: fadeIn 0.5s ease-out;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -335,9 +384,80 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+    # Visual Funnel Chart
+    st.markdown("---")
+    st.subheader("📊 Sales Funnel Visualization")
+
+    total = metrics.get('Total Leads', 0)
+    if total > 0:
+        # Create funnel data
+        funnel_data = {
+            'Stage': [
+                'Total Leads',
+                'Qualified Leads',
+                'Viewings Completed',
+                'Offers Made',
+                'Offers Accepted',
+                'Closed Sales'
+            ],
+            'Count': [
+                metrics.get('Total Leads', 0),
+                metrics.get('Qualified Leads', 0),
+                metrics.get('Viewings Completed', 0),
+                metrics.get('Offers Made', 0),
+                metrics.get('Offers Accepted', 0),
+                metrics.get('Closed Sales', 0)
+            ]
+        }
+
+        # Create two columns for funnel and progress bars
+        col_funnel, col_progress = st.columns([3, 2])
+
+        with col_funnel:
+            # Create Plotly funnel chart
+            fig = go.Figure(go.Funnel(
+                y=funnel_data['Stage'],
+                x=funnel_data['Count'],
+                textposition="inside",
+                textinfo="value+percent initial",
+                marker={
+                    "color": ["#667eea", "#764ba2", "#f093fb", "#4facfe", "#00f2fe", "#43e97b"],
+                    "line": {"width": 2, "color": "white"}
+                },
+                connector={"line": {"color": "#667eea", "dash": "dot", "width": 3}}
+            ))
+
+            fig.update_layout(
+                height=500,
+                margin=dict(l=20, r=20, t=20, b=20),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(size=14, color='#333')
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_progress:
+            st.markdown("#### Stage Conversion Rates")
+
+            # Progress bars for each stage
+            stages_progress = [
+                ("Qualified", metrics.get('Qualified Leads', 0), total),
+                ("Viewings", metrics.get('Viewings Completed', 0), total),
+                ("Offers", metrics.get('Offers Made', 0), total),
+                ("Accepted", metrics.get('Offers Accepted', 0), total),
+                ("Closed", metrics.get('Closed Sales', 0), total),
+            ]
+
+            for stage_name, stage_count, total_count in stages_progress:
+                percentage = (stage_count / total_count * 100) if total_count > 0 else 0
+                st.markdown(f"**{stage_name}**: {stage_count} ({percentage:.1f}%)")
+                st.progress(percentage / 100)
+                st.markdown("")  # spacing
+
     # Conversion funnel section
     st.markdown("---")
-    st.subheader("📈 Conversion Funnel")
+    st.subheader("📈 Conversion Rates")
 
     total = metrics.get('Total Leads', 0)
     if total > 0:
@@ -378,6 +498,98 @@ def main():
                 delta=None,
                 help=f"{metrics.get('Closed Sales', 0)} out of {total} leads"
             )
+
+    # Key Insights Section
+    st.markdown("---")
+    st.subheader("💡 Key Insights")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        # Best performing stage
+        qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
+        viewing_conversion = (metrics.get('Viewings Completed', 0) / metrics.get('Qualified Leads', 1) * 100) if metrics.get('Qualified Leads', 0) > 0 else 0
+
+        st.markdown("""
+        <div class="comparison-box">
+            <h4>🎯 Lead Quality</h4>
+        """, unsafe_allow_html=True)
+
+        if qualified_rate > 30:
+            st.success(f"✅ Strong qualification rate at {qualified_rate:.1f}%")
+        elif qualified_rate > 20:
+            st.info(f"📊 Moderate qualification rate at {qualified_rate:.1f}%")
+        else:
+            st.warning(f"⚠️ Low qualification rate at {qualified_rate:.1f}%")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        # Viewing to offer conversion
+        viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
+
+        st.markdown("""
+        <div class="comparison-box">
+            <h4>👁️ Viewing Performance</h4>
+        """, unsafe_allow_html=True)
+
+        if viewing_to_offer > 50:
+            st.success(f"✅ Excellent: {viewing_to_offer:.1f}% make offers")
+        elif viewing_to_offer > 30:
+            st.info(f"📊 Good: {viewing_to_offer:.1f}% make offers")
+        else:
+            st.warning(f"⚠️ Needs improvement: {viewing_to_offer:.1f}%")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col3:
+        # Offer acceptance rate
+        offer_acceptance = (metrics.get('Offers Accepted', 0) / metrics.get('Offers Made', 1) * 100) if metrics.get('Offers Made', 0) > 0 else 0
+
+        st.markdown("""
+        <div class="comparison-box">
+            <h4>✅ Offer Success</h4>
+        """, unsafe_allow_html=True)
+
+        if offer_acceptance > 60:
+            st.success(f"✅ High acceptance: {offer_acceptance:.1f}%")
+        elif offer_acceptance > 40:
+            st.info(f"📊 Moderate: {offer_acceptance:.1f}%")
+        else:
+            st.warning(f"⚠️ Low acceptance: {offer_acceptance:.1f}%")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Pipeline Health
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("#### 📊 Pipeline Health")
+        pipeline_stages = [
+            ("In Viewings", metrics.get('Viewings Scheduled', 0) + metrics.get('Viewings Completed', 0)),
+            ("In Negotiation", metrics.get('Offers Made', 0) + metrics.get('Offers Accepted', 0)),
+            ("Ready to Close", metrics.get('Offers Accepted', 0))
+        ]
+
+        for stage, count in pipeline_stages:
+            st.metric(stage, count)
+
+    with col2:
+        st.markdown("#### 🎯 Performance Targets")
+
+        # Calculate if targets are being met (example thresholds)
+        targets = {
+            "Qualification Rate": (qualified_rate, 30, "%"),
+            "Close Rate": (close_rate, 5, "%"),
+            "Viewing Conversion": (viewing_to_offer, 40, "%")
+        }
+
+        for metric_name, (value, target, unit) in targets.items():
+            if value >= target:
+                st.success(f"✅ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
+            else:
+                st.error(f"❌ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
 
     # Last updated timestamp
     if last_update:
