@@ -35,15 +35,31 @@ st.markdown("""
         display: none;
     }
 
+    /* Logo styling */
+    .logo-container {
+        text-align: center;
+        padding: 2rem 0 1rem 0;
+        margin-bottom: 1rem;
+    }
+
+    .logo-text {
+        font-size: 4.5rem;
+        font-weight: bold;
+        color: #F4B23E;
+        text-shadow: 2px 2px 4px rgba(244, 178, 62, 0.3);
+        letter-spacing: 2px;
+        font-family: 'Georgia', serif;
+        margin: 0;
+        line-height: 1;
+    }
+
     /* Main header */
     .main-header {
-        font-size: 3rem;
-        font-weight: bold;
+        font-size: 2rem;
+        font-weight: 600;
         text-align: center;
         margin-bottom: 0.5rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #333;
     }
 
     .subtitle {
@@ -328,8 +344,14 @@ def calculate_projections(metrics):
     return projections
 
 def main():
-    # Header
-    st.markdown('<h1 class="main-header">Joseph Mews Sales Dashboard</h1>', unsafe_allow_html=True)
+    # Logo and Header
+    st.markdown('''
+    <div class="logo-container">
+        <h1 class="logo-text">Joseph Mews</h1>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    st.markdown('<h2 class="main-header">Sales Dashboard</h2>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
 
     # Filters in an expander
