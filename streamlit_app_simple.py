@@ -691,7 +691,109 @@ def main():
                 with col_b:
                     st.metric("Daily Average", f"{avg_sales:.1f}")
 
+            # Budget Analysis (if budget column exists)
+            if 'Daily Budget' in filtered_daily.columns:
+                st.markdown("---")
+                st.markdown("#### 💰 Budget & Cost Analysis")
+
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.markdown("##### 📊 Daily Budget vs Leads")
+
+                    fig = go.Figure()
+
+                    # Budget bars
+                    fig.add_trace(go.Bar(
+                        x=filtered_daily['Date'],
+                        y=filtered_daily['Daily Budget'],
+                        name='Daily Budget',
+                        marker=dict(color='rgba(102, 126, 234, 0.6)'),
+                        yaxis='y'
+                    ))
+
+                    # Leads line
+                    fig.add_trace(go.Scatter(
+                        x=filtered_daily['Date'],
+                        y=filtered_daily.get('Total Leads', [0] * len(filtered_daily)),
+                        name='Total Leads',
+                        line=dict(color='#43e97b', width=3),
+                        marker=dict(size=8),
+                        yaxis='y2'
+                    ))
+
+                    fig.update_layout(
+                        height=300,
+                        margin=dict(l=20, r=20, t=20, b=20),
+                        xaxis_title="Date",
+                        yaxis=dict(title="Budget (£)", side='left'),
+                        yaxis2=dict(title="Leads", side='right', overlaying='y'),
+                        hovermode='x unified',
+                        showlegend=True,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.markdown("##### 💸 Cost Per Lead")
+
+                    # Calculate cost per lead
+                    filtered_daily['Cost Per Lead'] = filtered_daily.apply(
+                        lambda row: row['Daily Budget'] / row['Total Leads'] if row.get('Total Leads', 0) > 0 else 0,
+                        axis=1
+                    )
+
+                    fig = go.Figure()
+
+                    fig.add_trace(go.Scatter(
+                        x=filtered_daily['Date'],
+                        y=filtered_daily['Cost Per Lead'],
+                        mode='lines+markers',
+                        name='Cost Per Lead',
+                        line=dict(color='#f093fb', width=3),
+                        marker=dict(size=8),
+                        fill='tozeroy',
+                        fillcolor='rgba(240, 147, 251, 0.1)'
+                    ))
+
+                    fig.update_layout(
+                        height=300,
+                        margin=dict(l=20, r=20, t=20, b=20),
+                        xaxis_title="Date",
+                        yaxis_title="Cost (£)",
+                        hovermode='x unified',
+                        showlegend=False
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # Average cost per lead
+                    avg_cost = filtered_daily['Cost Per Lead'].mean()
+                    st.metric("Avg Cost Per Lead", f"£{avg_cost:.2f}")
+
+                with col3:
+                    st.markdown("##### 📈 Budget Efficiency")
+
+                    # Calculate efficiency metrics
+                    total_budget = filtered_daily['Daily Budget'].sum()
+                    total_leads_period = filtered_daily.get('Total Leads', pd.Series([0])).sum()
+                    total_sales_period = filtered_daily.get('Closed Sales', pd.Series([0])).sum()
+
+                    overall_cost_per_lead = total_budget / total_leads_period if total_leads_period > 0 else 0
+                    cost_per_sale = total_budget / total_sales_period if total_sales_period > 0 else 0
+
+                    st.metric("Total Budget", f"£{total_budget:,.0f}")
+                    st.metric("Cost Per Lead", f"£{overall_cost_per_lead:.2f}")
+                    st.metric("Cost Per Sale", f"£{cost_per_sale:.2f}")
+
+                    # Efficiency score
+                    if overall_cost_per_lead > 0:
+                        efficiency = (1 / overall_cost_per_lead) * 100
+                        st.metric("Efficiency Score", f"{efficiency:.1f}")
+
             # Multi-line funnel progression
+            st.markdown("---")
             st.markdown("#### 📈 Funnel Progression Over Time")
 
             fig = go.Figure()
