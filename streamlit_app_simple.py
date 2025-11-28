@@ -96,35 +96,54 @@ st.markdown("""
         line-height: 1;
     }
 
-    /* Conversion rate cards */
-    .conversion-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        border: 2px solid #e0e0e0;
+    /* Flow chart styling */
+    .flow-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 2rem 0;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .flow-metric {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
         text-align: center;
-        margin-bottom: 1.5rem;
+        min-width: 140px;
     }
 
-    .conversion-label {
-        font-size: 0.75rem;
-        color: #888;
-        margin-bottom: 0.3rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    .flow-metric-label {
+        font-size: 0.9rem;
+        color: rgba(255,255,255,0.9);
+        margin-bottom: 0.5rem;
+        font-weight: 500;
     }
 
-    .conversion-value {
-        font-size: 1.8rem;
+    .flow-metric-value {
+        font-size: 2.5rem;
         font-weight: bold;
-        color: #667eea;
+        color: white;
     }
 
-    .conversion-arrow {
+    .flow-arrow {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+        color: #667eea;
+        font-weight: 600;
+    }
+
+    .flow-arrow-icon {
+        font-size: 2rem;
+    }
+
+    .flow-arrow-rate {
         font-size: 1.2rem;
-        color: #999;
-        margin: 0.2rem 0;
+        font-weight: bold;
     }
 
     /* Last updated */
@@ -475,142 +494,87 @@ def main():
     accept_to_close_rate = (closed / offers_accepted * 100) if offers_accepted > 0 else 0
     overall_close_rate = (closed / total * 100) if total > 0 else 0
 
-    # Row 1: Total Leads → Qualified
-    col1, col2, col3, col4 = st.columns(4)
+    # Sales Funnel Flow Chart
+    st.markdown("### 📊 Sales Funnel Flow")
 
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Total Leads</div>
-            <div class="metric-value">{total}</div>
+    # Row 1: Total Leads → Qualified → Viewings Scheduled → Viewings Completed
+    st.markdown(f"""
+    <div class="flow-container">
+        <div class="flow-metric">
+            <div class="flow-metric-label">Total Leads</div>
+            <div class="flow-metric-value">{total}</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">↓</div>
-            <div class="conversion-label">Lead → Qualified</div>
-            <div class="conversion-value">{lead_to_qual_rate:.1f}%</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate">{lead_to_qual_rate:.1f}%</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Qualified</div>
-            <div class="metric-value">{qualified}</div>
+        <div class="flow-metric">
+            <div class="flow-metric-label">Qualified</div>
+            <div class="flow-metric-value">{qualified}</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">↓</div>
-            <div class="conversion-label">Qualified → Viewings Scheduled</div>
-            <div class="conversion-value">{qual_to_sched_rate:.1f}%</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate">{qual_to_sched_rate:.1f}%</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    # Row 2: Viewings Scheduled → Viewings Completed
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Viewings Scheduled</div>
-            <div class="metric-value">{viewings_scheduled}</div>
+        <div class="flow-metric">
+            <div class="flow-metric-label">Viewings Scheduled</div>
+            <div class="flow-metric-value">{viewings_scheduled}</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">↓</div>
-            <div class="conversion-label">Scheduled → Completed</div>
-            <div class="conversion-value">{sched_to_comp_rate:.1f}%</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate">{sched_to_comp_rate:.1f}%</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Viewings Completed</div>
-            <div class="metric-value">{viewings_completed}</div>
+        <div class="flow-metric">
+            <div class="flow-metric-label">Viewings Completed</div>
+            <div class="flow-metric-value">{viewings_completed}</div>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
-    with col4:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">↓</div>
-            <div class="conversion-label">Completed → Offers</div>
-            <div class="conversion-value">{comp_to_offer_rate:.1f}%</div>
+    # Row 2: Viewings Completed → Offers → Offers Accepted → Closed
+    st.markdown(f"""
+    <div class="flow-container">
+        <div class="flow-metric">
+            <div class="flow-metric-label">Viewings Completed</div>
+            <div class="flow-metric-value">{viewings_completed}</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    # Row 3: Offers → Offers Accepted
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Offers</div>
-            <div class="metric-value">{offers}</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate">{comp_to_offer_rate:.1f}%</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">↓</div>
-            <div class="conversion-label">Offers → Accepted</div>
-            <div class="conversion-value">{offer_to_accept_rate:.1f}%</div>
+        <div class="flow-metric">
+            <div class="flow-metric-label">Offers</div>
+            <div class="flow-metric-value">{offers}</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Offers Accepted</div>
-            <div class="metric-value">{offers_accepted}</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate">{offer_to_accept_rate:.1f}%</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">↓</div>
-            <div class="conversion-label">Accepted → Closed</div>
-            <div class="conversion-value">{accept_to_close_rate:.1f}%</div>
+        <div class="flow-metric">
+            <div class="flow-metric-label">Offers Accepted</div>
+            <div class="flow-metric-value">{offers_accepted}</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    # Row 4: Closed & Overall Close Rate
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Closed</div>
-            <div class="metric-value">{closed}</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate">{accept_to_close_rate:.1f}%</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown(f"""
-        <div class="conversion-card">
-            <div class="conversion-arrow">📊</div>
-            <div class="conversion-label">Overall Close Rate</div>
-            <div class="conversion-value">{overall_close_rate:.1f}%</div>
+        <div class="flow-metric">
+            <div class="flow-metric-label">Closed</div>
+            <div class="flow-metric-value">{closed}</div>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
-    with col3:
-        st.markdown("")  # Empty
-
-    with col4:
-        st.markdown("")  # Empty
+    # Overall Close Rate
+    st.markdown(f"""
+    <div style="text-align: center; margin: 2rem 0;">
+        <div style="display: inline-block; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+                    padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+            <div style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem;">Overall Close Rate</div>
+            <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_close_rate:.1f}%</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Visual Funnel Chart
     if show_funnel:
