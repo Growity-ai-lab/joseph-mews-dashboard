@@ -66,7 +66,7 @@ st.markdown("""
 
     /* Metric cards */
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #AB9548 0%, #F4B23E 100%);
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.15);
@@ -107,7 +107,7 @@ st.markdown("""
     }
 
     .flow-metric {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #AB9548 0%, #F4B23E 100%);
         padding: 1.5rem 2rem;
         border-radius: 12px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.15);
@@ -117,9 +117,11 @@ st.markdown("""
 
     .flow-metric-label {
         font-size: 0.9rem;
-        color: rgba(255,255,255,0.9);
+        color: rgba(255,255,255,0.95);
         margin-bottom: 0.5rem;
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .flow-metric-value {
@@ -133,7 +135,7 @@ st.markdown("""
         flex-direction: column;
         align-items: center;
         gap: 0.3rem;
-        color: #667eea;
+        color: #AB9548;
         font-weight: 600;
     }
 
@@ -169,12 +171,12 @@ st.markdown("""
 
     /* Loading animation */
     .stSpinner > div {
-        border-top-color: #667eea !important;
+        border-top-color: #AB9548 !important;
     }
 
     /* Progress bars styling */
     .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(90deg, #AB9548 0%, #F4B23E 100%);
     }
 
     /* Download button */
@@ -184,7 +186,7 @@ st.markdown("""
     }
 
     .download-btn {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #AB9548 0%, #F4B23E 100%);
         color: white;
         padding: 0.8rem 2rem;
         border-radius: 8px;
@@ -206,7 +208,7 @@ st.markdown("""
         padding: 1rem;
         border-radius: 8px;
         margin: 1rem 0;
-        border-left: 3px solid #667eea;
+        border-left: 3px solid #AB9548;
     }
 
     /* Animation for metrics */
@@ -568,9 +570,9 @@ def main():
     # Overall Close Rate
     st.markdown(f"""
     <div style="text-align: center; margin: 2rem 0;">
-        <div style="display: inline-block; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        <div style="display: inline-block; background: linear-gradient(135deg, #AB9548 0%, #F4B23E 100%);
                     padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-            <div style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem;">Overall Close Rate</div>
+            <div style="font-size: 1rem; color: rgba(255,255,255,0.95); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Overall Close Rate</div>
             <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_close_rate:.1f}%</div>
         </div>
     </div>
@@ -614,10 +616,10 @@ def main():
                 textposition="inside",
                 textinfo="value+percent initial",
                 marker={
-                    "color": ["#667eea", "#764ba2", "#f093fb", "#4facfe", "#00f2fe", "#43e97b"],
+                    "color": ["#AB9548", "#C4A84F", "#D6BA56", "#E5CB5D", "#F4B23E", "#F9C95E"],
                     "line": {"width": 2, "color": "white"}
                 },
-                connector={"line": {"color": "#667eea", "dash": "dot", "width": 3}}
+                connector={"line": {"color": "#AB9548", "dash": "dot", "width": 3}}
             ))
 
             fig.update_layout(
@@ -695,10 +697,10 @@ def main():
                     y=filtered_daily.get('Total Leads', [0] * len(filtered_daily)),
                     mode='lines+markers',
                     name='Total Leads',
-                    line=dict(color='#667eea', width=3),
+                    line=dict(color='#AB9548', width=3),
                     marker=dict(size=8),
                     fill='tozeroy',
-                    fillcolor='rgba(102, 126, 234, 0.1)'
+                    fillcolor='rgba(171, 149, 72, 0.1)'
                 ))
 
                 fig.update_layout(
@@ -733,7 +735,7 @@ def main():
                     name='Closed Sales',
                     marker=dict(
                         color=filtered_daily.get('Closed Sales', [0] * len(filtered_daily)),
-                        colorscale='Greens',
+                        colorscale=[[0, '#E5CB5D'], [0.5, '#F4B23E'], [1.0, '#AB9548']],
                         line=dict(color='white', width=1)
                     )
                 ))
@@ -776,7 +778,7 @@ def main():
                         x=filtered_daily['Date'],
                         y=filtered_daily['Daily Budget'],
                         name='Daily Budget',
-                        marker=dict(color='rgba(102, 126, 234, 0.6)'),
+                        marker=dict(color='rgba(171, 149, 72, 0.6)'),
                         yaxis='y'
                     ))
 
@@ -785,7 +787,7 @@ def main():
                         x=filtered_daily['Date'],
                         y=filtered_daily.get('Total Leads', [0] * len(filtered_daily)),
                         name='Total Leads',
-                        line=dict(color='#43e97b', width=3),
+                        line=dict(color='#F4B23E', width=3),
                         marker=dict(size=8),
                         yaxis='y2'
                     ))
@@ -819,10 +821,10 @@ def main():
                         y=filtered_daily['Cost Per Lead'],
                         mode='lines+markers',
                         name='Cost Per Lead',
-                        line=dict(color='#f093fb', width=3),
+                        line=dict(color='#D6BA56', width=3),
                         marker=dict(size=8),
                         fill='tozeroy',
-                        fillcolor='rgba(240, 147, 251, 0.1)'
+                        fillcolor='rgba(214, 186, 86, 0.1)'
                     ))
 
                     fig.update_layout(
@@ -867,11 +869,11 @@ def main():
             fig = go.Figure()
 
             metrics_to_plot = [
-                ('Total Leads', '#667eea'),
-                ('Qualified Leads', '#764ba2'),
-                ('Viewings Completed', '#f093fb'),
-                ('Offers Made', '#4facfe'),
-                ('Closed Sales', '#43e97b')
+                ('Total Leads', '#AB9548'),
+                ('Qualified Leads', '#C4A84F'),
+                ('Viewings Completed', '#D6BA56'),
+                ('Offers Made', '#E5CB5D'),
+                ('Closed Sales', '#F4B23E')
             ]
 
             for metric_name, color in metrics_to_plot:
@@ -945,7 +947,7 @@ def main():
                     y='stage',
                     orientation='h',
                     color='rate',
-                    color_continuous_scale=['#ff4444', '#ffaa00', '#44ff44'],
+                    color_continuous_scale=['#8B7438', '#AB9548', '#F4B23E'],
                     labels={'rate': 'Conversion Rate (%)', 'stage': 'Stage'},
                     text='rate'
                 )
