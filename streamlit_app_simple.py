@@ -98,11 +98,33 @@ st.markdown("""
 
     /* Conversion rate cards */
     .conversion-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        border-left: 4px solid #667eea;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 2px solid #e0e0e0;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .conversion-label {
+        font-size: 0.75rem;
+        color: #888;
+        margin-bottom: 0.3rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .conversion-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+
+    .conversion-arrow {
+        font-size: 1.2rem;
+        color: #999;
+        margin: 0.2rem 0;
     }
 
     /* Last updated */
@@ -436,87 +458,114 @@ def main():
     # Calculate metrics
     metrics = calculate_metrics(df)
 
-    # Display metrics in 4 columns for better layout
+    # Calculate conversion rates
+    total = metrics.get('Total Leads', 0)
+    qualified = metrics.get('Qualified Leads', 0)
+    viewings_scheduled = metrics.get('Viewings Scheduled', 0)
+    viewings_completed = metrics.get('Viewings Completed', 0)
+    offers = metrics.get('Offers Made', 0)
+    offers_accepted = metrics.get('Offers Accepted', 0)
+    closed = metrics.get('Closed Sales', 0)
+
+    lead_to_qual_rate = (qualified / total * 100) if total > 0 else 0
+    qual_to_sched_rate = (viewings_scheduled / qualified * 100) if qualified > 0 else 0
+    sched_to_comp_rate = (viewings_completed / viewings_scheduled * 100) if viewings_scheduled > 0 else 0
+    comp_to_offer_rate = (offers / viewings_completed * 100) if viewings_completed > 0 else 0
+    offer_to_accept_rate = (offers_accepted / offers * 100) if offers > 0 else 0
+    accept_to_close_rate = (closed / offers_accepted * 100) if offers_accepted > 0 else 0
+    overall_close_rate = (closed / total * 100) if total > 0 else 0
+
+    # Row 1: Total Leads → Qualified
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Total Leads</div>
-            <div class="metric-value">{metrics.get('Total Leads', 0)}</div>
+            <div class="metric-value">{total}</div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Drill-down detail
-        with st.expander("📊 View Details"):
-            total = metrics.get('Total Leads', 0)
-            qualified = metrics.get('Qualified Leads', 0)
-            st.write(f"**Qualified Rate:** {(qualified/total*100):.1f}%" if total > 0 else "No data")
-            st.write(f"**Not Qualified:** {total - qualified}" if total > 0 else "No data")
 
     with col2:
         st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Qualified</div>
-            <div class="metric-value">{metrics.get('Qualified Leads', 0)}</div>
+        <div class="conversion-card">
+            <div class="conversion-arrow">↓</div>
+            <div class="conversion-label">Lead → Qualified</div>
+            <div class="conversion-value">{lead_to_qual_rate:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Drill-down detail
-        with st.expander("📊 View Details"):
-            qualified = metrics.get('Qualified Leads', 0)
-            viewings = metrics.get('Viewings Completed', 0)
-            st.write(f"**To Viewing Rate:** {(viewings/qualified*100):.1f}%" if qualified > 0 else "No data")
-            st.write(f"**Pending Viewings:** {qualified - viewings}" if qualified > 0 else "No data")
 
     with col3:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-label">Offers</div>
-            <div class="metric-value">{metrics.get('Offers Made', 0)}</div>
+            <div class="metric-label">Qualified</div>
+            <div class="metric-value">{qualified}</div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Drill-down detail
-        with st.expander("📊 View Details"):
-            offers = metrics.get('Offers Made', 0)
-            accepted = metrics.get('Offers Accepted', 0)
-            st.write(f"**Acceptance Rate:** {(accepted/offers*100):.1f}%" if offers > 0 else "No data")
-            st.write(f"**Pending Offers:** {offers - accepted}" if offers > 0 else "No data")
 
     with col4:
         st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Closed</div>
-            <div class="metric-value">{metrics.get('Closed Sales', 0)}</div>
+        <div class="conversion-card">
+            <div class="conversion-arrow">↓</div>
+            <div class="conversion-label">Qualified → Viewings Scheduled</div>
+            <div class="conversion-value">{qual_to_sched_rate:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Drill-down detail
-        with st.expander("📊 View Details"):
-            total = metrics.get('Total Leads', 0)
-            closed = metrics.get('Closed Sales', 0)
-            close_rate = (closed / total * 100) if total > 0 else 0
-            st.write(f"**Overall Close Rate:** {close_rate:.1f}%")
-            st.write(f"**Average Value:** N/A (add to sheets)")
-            st.write(f"**Total Pipeline:** {total - closed} active")
-
-    # Second row
+    # Row 2: Viewings Scheduled → Viewings Completed
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Viewings Scheduled</div>
-            <div class="metric-value">{metrics.get('Viewings Scheduled', 0)}</div>
+            <div class="metric-value">{viewings_scheduled}</div>
         </div>
         """, unsafe_allow_html=True)
 
     with col2:
         st.markdown(f"""
+        <div class="conversion-card">
+            <div class="conversion-arrow">↓</div>
+            <div class="conversion-label">Scheduled → Completed</div>
+            <div class="conversion-value">{sched_to_comp_rate:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Viewings Completed</div>
-            <div class="metric-value">{metrics.get('Viewings Completed', 0)}</div>
+            <div class="metric-value">{viewings_completed}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown(f"""
+        <div class="conversion-card">
+            <div class="conversion-arrow">↓</div>
+            <div class="conversion-label">Completed → Offers</div>
+            <div class="conversion-value">{comp_to_offer_rate:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Row 3: Offers → Offers Accepted
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Offers</div>
+            <div class="metric-value">{offers}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div class="conversion-card">
+            <div class="conversion-arrow">↓</div>
+            <div class="conversion-label">Offers → Accepted</div>
+            <div class="conversion-value">{offer_to_accept_rate:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -524,20 +573,44 @@ def main():
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label">Offers Accepted</div>
-            <div class="metric-value">{metrics.get('Offers Accepted', 0)}</div>
+            <div class="metric-value">{offers_accepted}</div>
         </div>
         """, unsafe_allow_html=True)
 
     with col4:
-        # Conversion rate
-        total = metrics.get('Total Leads', 0)
-        close_rate = (metrics.get('Closed Sales', 0) / total * 100) if total > 0 else 0
         st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">Close Rate</div>
-            <div class="metric-value">{close_rate:.1f}%</div>
+        <div class="conversion-card">
+            <div class="conversion-arrow">↓</div>
+            <div class="conversion-label">Accepted → Closed</div>
+            <div class="conversion-value">{accept_to_close_rate:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
+
+    # Row 4: Closed & Overall Close Rate
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Closed</div>
+            <div class="metric-value">{closed}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div class="conversion-card">
+            <div class="conversion-arrow">📊</div>
+            <div class="conversion-label">Overall Close Rate</div>
+            <div class="conversion-value">{overall_close_rate:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("")  # Empty
+
+    with col4:
+        st.markdown("")  # Empty
 
     # Visual Funnel Chart
     if show_funnel:
@@ -954,50 +1027,6 @@ def main():
             st.write(f"Closed Sales: {projections['if_viewing_improves_10']} (+{projections['if_viewing_improves_10'] - current_closed})")
 
             st.success("💡 **Tip:** Focus on the bottleneck stage for maximum ROI")
-
-    # Conversion funnel section
-    st.markdown("---")
-    st.subheader("📈 Conversion Rates")
-
-    total = metrics.get('Total Leads', 0)
-    if total > 0:
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            qual_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
-            delta = f"+{qual_rate:.1f}%" if qual_rate > 0 else "0%"
-            st.metric(
-                "Lead → Qualified",
-                f"{qual_rate:.1f}%",
-                delta=None,
-                help=f"{metrics.get('Qualified Leads', 0)} out of {total} leads"
-            )
-
-        with col2:
-            viewing_rate = (metrics.get('Viewings Completed', 0) / total * 100) if total > 0 else 0
-            st.metric(
-                "Lead → Viewing",
-                f"{viewing_rate:.1f}%",
-                delta=None,
-                help=f"{metrics.get('Viewings Completed', 0)} out of {total} leads"
-            )
-
-        with col3:
-            offer_rate = (metrics.get('Offers Made', 0) / total * 100) if total > 0 else 0
-            st.metric(
-                "Lead → Offer",
-                f"{offer_rate:.1f}%",
-                delta=None,
-                help=f"{metrics.get('Offers Made', 0)} out of {total} leads"
-            )
-
-        with col4:
-            st.metric(
-                "Lead → Closed",
-                f"{close_rate:.1f}%",
-                delta=None,
-                help=f"{metrics.get('Closed Sales', 0)} out of {total} leads"
-            )
 
     # Pipeline Health & Performance Targets
     if (show_pipeline or show_targets) and total > 0:
