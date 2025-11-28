@@ -1,0 +1,15 @@
+.git
+.gitignore
+.streamlit/secrets.toml
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+*.egg-info
+.DS_Store
+README.md
+.vscode
+.idea
