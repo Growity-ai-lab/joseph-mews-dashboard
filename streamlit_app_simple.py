@@ -294,6 +294,14 @@ def load_metrics_from_sheets(_client, spreadsheet_url):
                 daily_df['Date'] = pd.to_datetime(daily_df['Date'], errors='coerce')
                 daily_df = daily_df.dropna(subset=['Date'])
                 daily_df = daily_df.sort_values('Date')
+
+            # Convert numeric columns to numeric type
+            numeric_columns = ['Total Leads', 'Qualified Leads', 'Viewings Scheduled',
+                             'Viewings Completed', 'Offers Made', 'Offers Accepted',
+                             'Closed Sales', 'Daily Budget']
+            for col in numeric_columns:
+                if col in daily_df.columns:
+                    daily_df[col] = pd.to_numeric(daily_df[col], errors='coerce').fillna(0)
         except:
             # Daily sheet doesn't exist yet
             pass
@@ -310,6 +318,13 @@ def load_metrics_from_sheets(_client, spreadsheet_url):
                 whatsapp_df['Date'] = pd.to_datetime(whatsapp_df['Date'], errors='coerce')
                 whatsapp_df = whatsapp_df.dropna(subset=['Date'])
                 whatsapp_df = whatsapp_df.sort_values('Date')
+
+            # Convert numeric columns to numeric type
+            numeric_columns = ['Messages Answered', 'Positive', 'Negative',
+                             'Relevant', 'Irrelevant', 'Scheduled Leads']
+            for col in numeric_columns:
+                if col in whatsapp_df.columns:
+                    whatsapp_df[col] = pd.to_numeric(whatsapp_df[col], errors='coerce').fillna(0)
         except:
             # WhatsApp sheet doesn't exist yet
             pass
