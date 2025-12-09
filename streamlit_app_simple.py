@@ -117,9 +117,11 @@ st.markdown("""
 
     .flow-metric-label {
         font-size: 0.9rem;
-        color: rgba(255,255,255,0.9);
+        color: rgba(255,255,255,0.95);
         margin-bottom: 0.5rem;
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .flow-metric-value {
@@ -296,10 +298,26 @@ def load_metrics_from_sheets(_client, spreadsheet_url):
             # Daily sheet doesn't exist yet
             pass
 
-        return df, daily_df, datetime.now()
+        # Try to load WhatsApp metrics
+        whatsapp_df = None
+        try:
+            whatsapp_worksheet = sheet.worksheet("WhatsApp")
+            whatsapp_data = whatsapp_worksheet.get_all_records()
+            whatsapp_df = pd.DataFrame(whatsapp_data)
+
+            # Convert Date column to datetime
+            if 'Date' in whatsapp_df.columns:
+                whatsapp_df['Date'] = pd.to_datetime(whatsapp_df['Date'], errors='coerce')
+                whatsapp_df = whatsapp_df.dropna(subset=['Date'])
+                whatsapp_df = whatsapp_df.sort_values('Date')
+        except:
+            # WhatsApp sheet doesn't exist yet
+            pass
+
+        return df, daily_df, whatsapp_df, datetime.now()
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), None, None
+        return pd.DataFrame(), None, None, None
 
 def calculate_metrics(df):
     """Calculate sales funnel metrics"""
@@ -448,7 +466,7 @@ def main():
             st.error("Could not connect to Google Sheets. Please check credentials.")
             return
 
-        df, daily_df, last_update = load_metrics_from_sheets(client, spreadsheet_url)
+        df, daily_df, whatsapp_df, last_update = load_metrics_from_sheets(client, spreadsheet_url)
 
     if df.empty:
         st.error("No data found. Check your Google Sheets and ensure 'Metrics' worksheet exists.")
@@ -570,7 +588,7 @@ def main():
     <div style="text-align: center; margin: 2rem 0;">
         <div style="display: inline-block; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
                     padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-            <div style="font-size: 1rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem;">Overall Close Rate</div>
+            <div style="font-size: 1rem; color: rgba(255,255,255,0.95); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Overall Close Rate</div>
             <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_close_rate:.1f}%</div>
         </div>
     </div>
@@ -647,6 +665,280 @@ def main():
                 st.markdown(f"**{stage_name}**: {stage_count} ({percentage:.1f}%)")
                 st.progress(percentage / 100)
                 st.markdown("")  # spacing
+
+    # WhatsApp Metrics
+    if whatsapp_df is not None and not whatsapp_df.empty:
+        st.markdown("---")
+        st.subheader("💬 WhatsApp Metrics")
+
+        # Get latest day's data
+        latest_whatsapp = whatsapp_df.iloc[-1]
+
+        # Calculate conversion rates
+        messages_answered = latest_whatsapp.get('Messages Answered', 0)
+        relevant = latest_whatsapp.get('Relevant', 0)
+        positive = latest_whatsapp.get('Positive', 0)
+        scheduled = latest_whatsapp.get('Scheduled Leads', 0)
+
+        # Conversion rates
+        answered_to_relevant = (relevant / messages_answered * 100) if messages_answered > 0 else 0
+        relevant_to_positive = (positive / relevant * 100) if relevant > 0 else 0
+        positive_to_scheduled = (scheduled / positive * 100) if positive > 0 else 0
+        overall_conversion = (scheduled / messages_answered * 100) if messages_answered > 0 else 0
+
+        # WhatsApp Flow Chart
+        st.markdown("### 📊 WhatsApp Conversion Flow")
+
+        st.markdown(f"""
+        <div class="flow-container">
+            <div class="flow-metric">
+                <div class="flow-metric-label">Messages Answered</div>
+                <div class="flow-metric-value">{int(messages_answered)}</div>
+            </div>
+            <div class="flow-arrow">
+                <div class="flow-arrow-icon">→</div>
+                <div class="flow-arrow-rate">{answered_to_relevant:.1f}%</div>
+            </div>
+            <div class="flow-metric">
+                <div class="flow-metric-label">Relevant</div>
+                <div class="flow-metric-value">{int(relevant)}</div>
+            </div>
+            <div class="flow-arrow">
+                <div class="flow-arrow-icon">→</div>
+                <div class="flow-arrow-rate">{relevant_to_positive:.1f}%</div>
+            </div>
+            <div class="flow-metric">
+                <div class="flow-metric-label">Positive</div>
+                <div class="flow-metric-value">{int(positive)}</div>
+            </div>
+            <div class="flow-arrow">
+                <div class="flow-arrow-icon">→</div>
+                <div class="flow-arrow-rate">{positive_to_scheduled:.1f}%</div>
+            </div>
+            <div class="flow-metric">
+                <div class="flow-metric-label">Scheduled Leads</div>
+                <div class="flow-metric-value">{int(scheduled)}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Overall Conversion Rate
+        st.markdown(f"""
+        <div style="text-align: center; margin: 2rem 0;">
+            <div style="display: inline-block; background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+                        padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 1rem; color: rgba(255,255,255,0.95); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Overall Conversion Rate</div>
+                <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_conversion:.1f}%</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Summary cards in columns
+        st.markdown("---")
+        st.markdown("#### 📈 Daily Summary")
+
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+        with col1:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
+                    Answered
+                </div>
+                <div style="font-size: 2rem; font-weight: bold; color: white;">
+                    {}
+                </div>
+            </div>
+            """.format(int(messages_answered)), unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
+                    Positive
+                </div>
+                <div style="font-size: 2rem; font-weight: bold; color: white;">
+                    {}
+                </div>
+            </div>
+            """.format(int(positive)), unsafe_allow_html=True)
+
+        with col3:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
+                    Negative
+                </div>
+                <div style="font-size: 2rem; font-weight: bold; color: white;">
+                    {}
+                </div>
+            </div>
+            """.format(int(latest_whatsapp.get('Negative', 0))), unsafe_allow_html=True)
+
+        with col4:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
+                    Relevant
+                </div>
+                <div style="font-size: 2rem; font-weight: bold; color: white;">
+                    {}
+                </div>
+            </div>
+            """.format(int(relevant)), unsafe_allow_html=True)
+
+        with col5:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
+                    Irrelevant
+                </div>
+                <div style="font-size: 2rem; font-weight: bold; color: white;">
+                    {}
+                </div>
+            </div>
+            """.format(int(latest_whatsapp.get('Irrelevant', 0))), unsafe_allow_html=True)
+
+        with col6:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
+                    Scheduled
+                </div>
+                <div style="font-size: 2rem; font-weight: bold; color: white;">
+                    {}
+                </div>
+            </div>
+            """.format(int(scheduled)), unsafe_allow_html=True)
+
+        # Daily trends for WhatsApp
+        st.markdown("---")
+        st.markdown("#### 📊 WhatsApp Daily Trends")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Messages Answered trend
+            fig = go.Figure()
+
+            fig.add_trace(go.Scatter(
+                x=whatsapp_df['Date'],
+                y=whatsapp_df.get('Messages Answered', [0] * len(whatsapp_df)),
+                mode='lines+markers',
+                name='Messages Answered',
+                line=dict(color='#25D366', width=3),
+                marker=dict(size=8),
+                fill='tozeroy',
+                fillcolor='rgba(37, 211, 102, 0.1)'
+            ))
+
+            fig.update_layout(
+                title="Messages Answered",
+                height=300,
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis_title="Date",
+                yaxis_title="Messages",
+                hovermode='x unified',
+                showlegend=False
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # Positive vs Negative
+            fig = go.Figure()
+
+            fig.add_trace(go.Bar(
+                x=whatsapp_df['Date'],
+                y=whatsapp_df.get('Positive', [0] * len(whatsapp_df)),
+                name='Positive',
+                marker=dict(color='#43e97b')
+            ))
+
+            fig.add_trace(go.Bar(
+                x=whatsapp_df['Date'],
+                y=whatsapp_df.get('Negative', [0] * len(whatsapp_df)),
+                name='Negative',
+                marker=dict(color='#ff6b6b')
+            ))
+
+            fig.update_layout(
+                title="Positive vs Negative",
+                height=300,
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis_title="Date",
+                yaxis_title="Messages",
+                hovermode='x unified',
+                barmode='group'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Relevant vs Irrelevant & Scheduled Leads
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Relevant vs Irrelevant
+            fig = go.Figure()
+
+            fig.add_trace(go.Bar(
+                x=whatsapp_df['Date'],
+                y=whatsapp_df.get('Relevant', [0] * len(whatsapp_df)),
+                name='Relevant',
+                marker=dict(color='#667eea')
+            ))
+
+            fig.add_trace(go.Bar(
+                x=whatsapp_df['Date'],
+                y=whatsapp_df.get('Irrelevant', [0] * len(whatsapp_df)),
+                name='Irrelevant',
+                marker=dict(color='#f093fb')
+            ))
+
+            fig.update_layout(
+                title="Relevant vs Irrelevant",
+                height=300,
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis_title="Date",
+                yaxis_title="Messages",
+                hovermode='x unified',
+                barmode='group'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            # Scheduled Leads
+            fig = go.Figure()
+
+            fig.add_trace(go.Scatter(
+                x=whatsapp_df['Date'],
+                y=whatsapp_df.get('Scheduled Leads', [0] * len(whatsapp_df)),
+                mode='lines+markers',
+                name='Scheduled Leads',
+                line=dict(color='#4facfe', width=3),
+                marker=dict(size=8),
+                fill='tozeroy',
+                fillcolor='rgba(79, 172, 254, 0.1)'
+            ))
+
+            fig.update_layout(
+                title="Scheduled Leads",
+                height=300,
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis_title="Date",
+                yaxis_title="Leads",
+                hovermode='x unified',
+                showlegend=False
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
 
     # Daily Trends
     if show_trends and daily_df is not None and not daily_df.empty:
