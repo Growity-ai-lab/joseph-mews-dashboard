@@ -22,204 +22,415 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS - Enhanced design
-st.markdown("""
+# Initialize session state for dark mode
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
+
+# Theme colors
+if st.session_state.dark_mode:
+    bg_color = "#0e1117"
+    card_bg = "rgba(255, 255, 255, 0.05)"
+    text_color = "#fafafa"
+    subtitle_color = "#a0a0a0"
+    border_color = "rgba(255, 255, 255, 0.1)"
+else:
+    bg_color = "#ffffff"
+    card_bg = "rgba(255, 255, 255, 0.9)"
+    text_color = "#333333"
+    subtitle_color = "#666666"
+    border_color = "rgba(0, 0, 0, 0.1)"
+
+# Custom CSS - Modern Enhanced Design
+st.markdown(f"""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* Global Styles */
+    * {{
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }}
+
+    /* Main container */
+    .main {{
+        background: {bg_color};
+        color: {text_color};
+        transition: all 0.3s ease;
+    }}
+
     /* Hide sidebar completely */
-    [data-testid="stSidebar"] {
+    [data-testid="stSidebar"] {{
         display: none;
-    }
+    }}
 
-    /* Logo styling */
-    .logo-container {
+    /* Smooth transitions for all elements */
+    .element-container, .stMarkdown, .stPlotlyChart {{
+        animation: fadeInUp 0.6s ease-out;
+    }}
+
+    @keyframes fadeInUp {{
+        from {{
+            opacity: 0;
+            transform: translateY(20px);
+        }}
+        to {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
+    }}
+
+    /* Counter animation */
+    @keyframes countUp {{
+        from {{
+            opacity: 0;
+            transform: scale(0.5);
+        }}
+        to {{
+            opacity: 1;
+            transform: scale(1);
+        }}
+    }}
+
+    /* Logo styling with glassmorphism */
+    .logo-container {{
         text-align: center;
-        padding: 2rem 0 1rem 0;
-        margin-bottom: 1rem;
-    }
+        padding: 2.5rem 0 1.5rem 0;
+        margin-bottom: 2rem;
+        background: {card_bg};
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid {border_color};
+        border-radius: 24px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }}
 
-    .logo-text {
+    .logo-text {{
         font-size: 4.5rem;
-        font-weight: bold;
-        color: #F4B23E;
-        text-shadow: 2px 2px 4px rgba(244, 178, 62, 0.3);
+        font-weight: 700;
+        background: linear-gradient(135deg, #F4B23E 0%, #E09F3E 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         letter-spacing: 2px;
-        font-family: 'Georgia', serif;
         margin: 0;
         line-height: 1;
-    }
+        animation: fadeInUp 0.8s ease-out;
+    }}
 
     /* Main header */
-    .main-header {
+    .main-header {{
         font-size: 2rem;
         font-weight: 600;
         text-align: center;
         margin-bottom: 0.5rem;
-        color: #333;
-    }
+        color: {text_color};
+    }}
 
-    .subtitle {
+    .subtitle {{
         text-align: center;
-        color: #666;
+        color: {subtitle_color};
         font-size: 1.1rem;
         margin-bottom: 2rem;
-    }
+        font-weight: 400;
+    }}
 
-    /* Metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    /* Glassmorphism Metric cards */
+    .metric-card {{
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid {border_color};
         padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         margin-bottom: 1.5rem;
         text-align: center;
-        transition: transform 0.2s;
-    }
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }}
 
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-    }
+    .metric-card::before {{
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 0;
+    }}
 
-    .metric-label {
-        font-size: 1rem;
-        color: rgba(255,255,255,0.9);
-        margin-bottom: 0.8rem;
-        font-weight: 500;
+    .metric-card:hover {{
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
+        border-color: rgba(102, 126, 234, 0.3);
+    }}
+
+    .metric-card:hover::before {{
+        opacity: 1;
+    }}
+
+    .metric-label {{
+        font-size: 0.875rem;
+        color: {subtitle_color};
+        margin-bottom: 1rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1px;
-    }
+        letter-spacing: 1.5px;
+        position: relative;
+        z-index: 1;
+    }}
 
-    .metric-value {
+    .metric-value {{
         font-size: 3.5rem;
-        font-weight: bold;
-        color: white;
+        font-weight: 700;
+        color: {text_color};
         line-height: 1;
-    }
+        position: relative;
+        z-index: 1;
+        animation: countUp 0.6s ease-out;
+    }}
 
-    /* Flow chart styling */
-    .flow-container {
+    /* Modern Flow chart styling */
+    .flow-container {{
         display: flex;
         align-items: center;
         justify-content: center;
         margin: 2rem 0;
         flex-wrap: wrap;
-        gap: 1rem;
-    }
+        gap: 1.5rem;
+        padding: 2rem;
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 24px;
+        border: 1px solid {border_color};
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    }}
 
-    .flow-metric {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    .flow-metric {{
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 1.75rem 2.25rem;
+        border-radius: 16px;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
         text-align: center;
-        min-width: 140px;
-    }
+        min-width: 150px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }}
 
-    .flow-metric-label {
-        font-size: 0.9rem;
+    .flow-metric::before {{
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        transform: rotate(45deg);
+        transition: all 0.5s;
+    }}
+
+    .flow-metric:hover {{
+        transform: translateY(-4px) scale(1.05);
+        box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+    }}
+
+    .flow-metric:hover::before {{
+        left: 100%;
+    }}
+
+    .flow-metric-label {{
+        font-size: 0.875rem;
         color: rgba(255,255,255,0.95);
-        margin-bottom: 0.5rem;
-        font-weight: 500;
+        margin-bottom: 0.75rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
+        letter-spacing: 1px;
+    }}
 
-    .flow-metric-value {
-        font-size: 2.5rem;
-        font-weight: bold;
+    .flow-metric-value {{
+        font-size: 2.75rem;
+        font-weight: 700;
         color: white;
-    }
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        animation: countUp 0.6s ease-out;
+    }}
 
-    .flow-arrow {
+    .flow-arrow {{
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.3rem;
+        gap: 0.5rem;
         color: #667eea;
-        font-weight: 600;
-    }
+        font-weight: 700;
+        animation: pulse 2s ease-in-out infinite;
+    }}
 
-    .flow-arrow-icon {
-        font-size: 2rem;
-    }
+    @keyframes pulse {{
+        0%, 100% {{
+            opacity: 1;
+            transform: scale(1);
+        }}
+        50% {{
+            opacity: 0.8;
+            transform: scale(1.1);
+        }}
+    }}
 
-    .flow-arrow-rate {
-        font-size: 1.2rem;
-        font-weight: bold;
-    }
+    .flow-arrow-icon {{
+        font-size: 2.25rem;
+        filter: drop-shadow(0 2px 4px rgba(102, 126, 234, 0.3));
+    }}
+
+    .flow-arrow-rate {{
+        font-size: 1.25rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }}
+
+    /* Dark mode toggle */
+    .dark-mode-toggle {{
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid {border_color};
+        border-radius: 50px;
+        padding: 0.5rem 1rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }}
+
+    .dark-mode-toggle:hover {{
+        transform: scale(1.05);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+    }}
 
     /* Last updated */
-    .last-update {
+    .last-update {{
         text-align: center;
-        color: #888;
+        color: {subtitle_color};
         font-size: 0.9rem;
-        margin-top: 2rem;
-        padding: 1rem;
-        background: #f8f9fa;
-        border-radius: 8px;
-    }
+        margin-top: 3rem;
+        padding: 1.5rem;
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 16px;
+        border: 1px solid {border_color};
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }}
 
     /* Footer */
-    .footer {
+    .footer {{
         text-align: center;
-        color: #999;
-        font-size: 0.8rem;
-        margin-top: 3rem;
-        padding: 1rem;
-        border-top: 1px solid #eee;
-    }
+        color: {subtitle_color};
+        font-size: 0.85rem;
+        margin-top: 4rem;
+        padding: 2rem;
+        border-top: 1px solid {border_color};
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }}
 
     /* Loading animation */
-    .stSpinner > div {
+    .stSpinner > div {{
         border-top-color: #667eea !important;
-    }
+    }}
 
     /* Progress bars styling */
-    .stProgress > div > div > div > div {
+    .stProgress > div > div > div > div {{
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }}
 
-    /* Download button */
-    .download-section {
-        text-align: center;
-        margin: 2rem 0;
-    }
-
-    .download-btn {
+    /* Buttons */
+    .stButton > button {{
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 0.8rem 2rem;
-        border-radius: 8px;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }}
+
+    .stButton > button:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }}
+
+    /* Download button */
+    .download-section {{
+        text-align: center;
+        margin: 2rem 0;
+    }}
+
+    .download-btn {{
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 2.5rem;
+        border-radius: 12px;
         text-decoration: none;
         display: inline-block;
         font-weight: 600;
-        transition: transform 0.2s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         border: none;
         cursor: pointer;
-    }
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }}
 
-    .download-btn:hover {
-        transform: scale(1.05);
-    }
+    .download-btn:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }}
 
     /* Metric comparison */
-    .comparison-box {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
+    .comparison-box {{
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 1.5rem;
+        border-radius: 12px;
         margin: 1rem 0;
-        border-left: 3px solid #667eea;
-    }
+        border-left: 4px solid #667eea;
+        border: 1px solid {border_color};
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }}
 
-    /* Animation for metrics */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+    /* Expander styling */
+    .streamlit-expanderHeader {{
+        background: {card_bg};
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 12px;
+        border: 1px solid {border_color};
+        font-weight: 600;
+    }}
 
-    .metric-card {
-        animation: fadeIn 0.5s ease-out;
-    }
+    /* Plotly charts */
+    .js-plotly-plot {{
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -413,6 +624,15 @@ def calculate_projections(metrics):
     return projections
 
 def main():
+    # Dark Mode Toggle
+    col_left, col_center, col_right = st.columns([4, 1, 1])
+    with col_right:
+        dark_mode_icon = "🌙" if not st.session_state.dark_mode else "☀️"
+        dark_mode_text = "Dark" if not st.session_state.dark_mode else "Light"
+        if st.button(f"{dark_mode_icon} {dark_mode_text}", key="dark_mode_toggle", use_container_width=True):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+
     # Logo and Header
     st.markdown('''
     <div class="logo-container">
