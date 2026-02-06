@@ -469,6 +469,58 @@ st.markdown(f"""
         font-size: 0.95rem;
         display: inline;
     }}
+
+    /* Temperature Cards */
+    .temp-card {{
+        background: linear-gradient(135deg, {{gradient_start}} 0%, {{gradient_end}} 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid {border_color};
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        animation: fadeInUp 0.6s ease-out;
+    }}
+
+    .temp-card:hover {{
+        transform: translateY(-5px);
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+    }}
+
+    .temp-icon {{
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        display: block;
+    }}
+
+    .temp-label {{
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }}
+
+    .temp-value {{
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+    }}
+
+    .temp-percentage {{
+        font-size: 1rem;
+        opacity: 0.8;
+    }}
+
+    .temp-conversion {{
+        font-size: 0.8rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        opacity: 0.9;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -661,6 +713,53 @@ def calculate_projections(metrics):
 
     return projections
 
+def calculate_lead_temperature(metrics):
+    """Calculate lead distribution by temperature (Hot/Warm/Cold)"""
+    total = metrics.get('Total Leads', 0)
+    if total == 0:
+        return {'hot': 0, 'warm': 0, 'cold': 0, 'hot_pct': 0, 'warm_pct': 0, 'cold_pct': 0}
+
+    qualified = metrics.get('Qualified Leads', 0)
+    viewings_scheduled = metrics.get('Viewings Scheduled', 0)
+    viewings_completed = metrics.get('Viewings Completed', 0)
+    offers_made = metrics.get('Offers Made', 0)
+    offers_accepted = metrics.get('Offers Accepted', 0)
+
+    # HOT Leads: Viewing completed + in offer stage
+    # High intent, ready to close
+    hot = min(viewings_completed, offers_made + offers_accepted)
+
+    # WARM Leads: Qualified + viewing stage (not yet hot)
+    # Interested and engaged, needs nurturing
+    warm = max(0, min(qualified, viewings_scheduled + viewings_completed) - hot)
+
+    # COLD Leads: Everything else
+    # Early stage, needs qualification
+    cold = max(0, total - hot - warm)
+
+    # Calculate percentages
+    hot_pct = (hot / total * 100) if total > 0 else 0
+    warm_pct = (warm / total * 100) if total > 0 else 0
+    cold_pct = (cold / total * 100) if total > 0 else 0
+
+    # Calculate conversion rates
+    hot_to_close = (metrics.get('Closed Sales', 0) / hot * 100) if hot > 0 else 0
+    warm_to_hot = (hot / warm * 100) if warm > 0 else 0
+    cold_to_warm = (warm / cold * 100) if cold > 0 else 0
+
+    return {
+        'hot': hot,
+        'warm': warm,
+        'cold': cold,
+        'hot_pct': hot_pct,
+        'warm_pct': warm_pct,
+        'cold_pct': cold_pct,
+        'hot_to_close': hot_to_close,
+        'warm_to_hot': warm_to_hot,
+        'cold_to_warm': cold_to_warm,
+        'quality_score': (hot * 3 + warm * 2 + cold * 1) / total if total > 0 else 0
+    }
+
 def generate_section_insight(section, metrics, daily_df=None, whatsapp_df=None):
     """Generate AI insight for a specific section"""
     if not AI_AVAILABLE:
@@ -715,6 +814,17 @@ ONE recommendation (2-3 sentences): How to fix this bottleneck? Be specific and 
             prompt = f"""7-day trend: Last 3 days had {trend_leads[0]}, {trend_leads[1]}, {trend_leads[2]} leads.
 
 ONE observation (2-3 sentences): What pattern do you see? Be specific."""
+
+        elif section == "temperature":
+            temp_data = calculate_lead_temperature(metrics)
+            hot = temp_data['hot']
+            warm = temp_data['warm']
+            cold = temp_data['cold']
+            quality_score = temp_data['quality_score']
+
+            prompt = f"""Lead temperature: {hot} hot ({temp_data['hot_pct']:.1f}%), {warm} warm ({temp_data['warm_pct']:.1f}%), {cold} cold ({temp_data['cold_pct']:.1f}%). Quality score: {quality_score:.1f}/3.0.
+
+ONE insight (2-3 sentences): What does this temperature distribution tell us about lead quality? Be specific and actionable."""
 
         else:
             return None
@@ -885,6 +995,7 @@ def main():
             if st.session_state.show_ai_insights and not st.session_state.ai_insights_cache:
                 with st.spinner('🧠 Generating AI insights...'):
                     st.session_state.ai_insights_cache['funnel'] = generate_section_insight('funnel', metrics)
+                    st.session_state.ai_insights_cache['temperature'] = generate_section_insight('temperature', metrics)
                     st.session_state.ai_insights_cache['whatsapp'] = generate_section_insight('whatsapp', metrics, whatsapp_df=whatsapp_df)
                     st.session_state.ai_insights_cache['bottleneck'] = generate_section_insight('bottleneck', metrics)
                     st.session_state.ai_insights_cache['trends'] = generate_section_insight('trends', metrics, daily_df=daily_df)
@@ -975,6 +1086,130 @@ def main():
     # AI Insight for Funnel
     if st.session_state.show_ai_insights and 'funnel' in st.session_state.ai_insights_cache:
         display_ai_insight("💡", st.session_state.ai_insights_cache['funnel'])
+
+    # Lead Temperature Distribution
+    st.markdown("---")
+    st.subheader("🌡️ Lead Temperature Distribution")
+
+    temp_data = calculate_lead_temperature(metrics)
+
+    # Temperature Cards
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        # HOT Leads
+        st.markdown(f"""
+        <div class="temp-card" style="background: linear-gradient(135deg, rgba(255, 68, 68, 0.15) 0%, rgba(255, 136, 0, 0.15) 100%);">
+            <span class="temp-icon">🔥</span>
+            <div class="temp-label" style="color: #ff4444;">Hot Leads</div>
+            <div class="temp-value" style="color: #ff4444;">{temp_data['hot']}</div>
+            <div class="temp-percentage" style="color: #ff6666;">{temp_data['hot_pct']:.1f}%</div>
+            <div class="temp-conversion" style="color: #ff6666;">
+                {temp_data['hot_to_close']:.1f}% → Close
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        # WARM Leads
+        st.markdown(f"""
+        <div class="temp-card" style="background: linear-gradient(135deg, rgba(255, 170, 0, 0.15) 0%, rgba(255, 196, 0, 0.15) 100%);">
+            <span class="temp-icon">🟡</span>
+            <div class="temp-label" style="color: #ffaa00;">Warm Leads</div>
+            <div class="temp-value" style="color: #ffaa00;">{temp_data['warm']}</div>
+            <div class="temp-percentage" style="color: #ffbb33;">{temp_data['warm_pct']:.1f}%</div>
+            <div class="temp-conversion" style="color: #ffbb33;">
+                {temp_data['warm_to_hot']:.1f}% → Hot
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        # COLD Leads
+        st.markdown(f"""
+        <div class="temp-card" style="background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.15) 100%);">
+            <span class="temp-icon">🧊</span>
+            <div class="temp-label" style="color: #4facfe;">Cold Leads</div>
+            <div class="temp-value" style="color: #4facfe;">{temp_data['cold']}</div>
+            <div class="temp-percentage" style="color: #6fc0ff;">{temp_data['cold_pct']:.1f}%</div>
+            <div class="temp-conversion" style="color: #6fc0ff;">
+                {temp_data['cold_to_warm']:.1f}% → Warm
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        # Quality Score
+        quality_color = "#43e97b" if temp_data['quality_score'] >= 2.0 else "#ffaa00" if temp_data['quality_score'] >= 1.5 else "#ff4444"
+        st.markdown(f"""
+        <div class="temp-card" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);">
+            <span class="temp-icon">🎯</span>
+            <div class="temp-label" style="color: {quality_color};">Quality Score</div>
+            <div class="temp-value" style="color: {quality_color};">{temp_data['quality_score']:.2f}</div>
+            <div class="temp-percentage" style="color: {quality_color};">out of 3.00</div>
+            <div class="temp-conversion" style="color: {quality_color};">
+                {"🌟 Excellent" if temp_data['quality_score'] >= 2.0 else "⚡ Good" if temp_data['quality_score'] >= 1.5 else "💡 Improving"}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Temperature Distribution Chart
+    st.markdown("### 📊 Temperature Distribution")
+
+    col_chart1, col_chart2 = st.columns(2)
+
+    with col_chart1:
+        # Pie chart
+        fig_pie = go.Figure(data=[go.Pie(
+            labels=['🔥 Hot', '🟡 Warm', '🧊 Cold'],
+            values=[temp_data['hot'], temp_data['warm'], temp_data['cold']],
+            hole=0.4,
+            marker=dict(colors=['#ff4444', '#ffaa00', '#4facfe']),
+            textinfo='label+percent',
+            textposition='outside',
+            hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+        )])
+
+        fig_pie.update_layout(
+            title="Lead Distribution",
+            height=350,
+            showlegend=False,
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
+
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    with col_chart2:
+        # Conversion funnel by temperature
+        fig_bar = go.Figure()
+
+        fig_bar.add_trace(go.Bar(
+            y=['Cold → Warm', 'Warm → Hot', 'Hot → Close'],
+            x=[temp_data['cold_to_warm'], temp_data['warm_to_hot'], temp_data['hot_to_close']],
+            orientation='h',
+            marker=dict(
+                color=[temp_data['cold_to_warm'], temp_data['warm_to_hot'], temp_data['hot_to_close']],
+                colorscale=[[0, '#4facfe'], [0.5, '#ffaa00'], [1, '#ff4444']],
+                showscale=False
+            ),
+            text=[f"{temp_data['cold_to_warm']:.1f}%", f"{temp_data['warm_to_hot']:.1f}%", f"{temp_data['hot_to_close']:.1f}%"],
+            textposition='outside',
+            hovertemplate='<b>%{y}</b><br>Conversion: %{x:.1f}%<extra></extra>'
+        ))
+
+        fig_bar.update_layout(
+            title="Conversion Rates by Stage",
+            height=350,
+            showlegend=False,
+            margin=dict(l=20, r=20, t=40, b=20),
+            xaxis=dict(title="Conversion Rate (%)", range=[0, max(100, max(temp_data['cold_to_warm'], temp_data['warm_to_hot'], temp_data['hot_to_close']) * 1.2)])
+        )
+
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # AI Insight for Temperature
+    if st.session_state.show_ai_insights and 'temperature' in st.session_state.ai_insights_cache:
+        display_ai_insight("🌡️", st.session_state.ai_insights_cache['temperature'])
 
     # Visual Funnel Chart
     if show_funnel:
