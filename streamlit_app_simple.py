@@ -722,9 +722,16 @@ def calculate_projections(metrics):
         'current_close_rate': close_rate * 100
     }
 
-    # What if scenarios
-    projections['if_qual_improves_10'] = int(projection_input * min(qual_rate * 1.1, 1.0) * close_rate / qual_rate) if qual_rate > 0 else 0
-    projections['if_viewing_improves_10'] = int(projection_input * close_rate / viewing_rate * min(viewing_rate * 1.1, 1.0)) if viewing_rate > 0 else 0
+    # What if scenarios - impact of 10% improvement at each stage
+    # If qualification improves by 10%: more leads get qualified
+    new_qual_count = projections['projected_qualified'] * 1.1
+    qual_to_close_rate = close_rate / qual_rate if qual_rate > 0 else 0
+    projections['if_qual_improves_10'] = int(new_qual_count * qual_to_close_rate)
+
+    # If viewing completion improves by 10%: more viewings convert to sales
+    new_viewing_count = projections['projected_viewings'] * 1.1
+    viewing_to_close_rate = close_rate / viewing_rate if viewing_rate > 0 else 0
+    projections['if_viewing_improves_10'] = int(new_viewing_count * viewing_to_close_rate)
 
     return projections
 
@@ -1145,16 +1152,13 @@ def main():
             <div class="flow-metric-label">Closed</div>
             <div class="flow-metric-value">{closed}</div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Overall Close Rate
-    st.markdown(f"""
-    <div style="text-align: center; margin: 2rem 0;">
-        <div style="display: inline-block; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-                    padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-            <div style="font-size: 1rem; color: rgba(255,255,255,0.95); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Overall Close Rate</div>
-            <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_close_rate:.1f}%</div>
+        <div class="flow-arrow">
+            <div class="flow-arrow-icon">→</div>
+            <div class="flow-arrow-rate"></div>
+        </div>
+        <div class="flow-metric" style="background: linear-gradient(135deg, rgba(67, 233, 123, 0.9) 0%, rgba(56, 249, 215, 0.9) 100%);">
+            <div class="flow-metric-label">Close Rate</div>
+            <div class="flow-metric-value">{overall_close_rate:.1f}%</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1544,14 +1548,22 @@ def main():
         st.markdown("---")
         st.subheader("WhatsApp Metrics")
 
-        # Get latest day's data
+        # Get latest day's data or sum of all data if latest is empty
         latest_whatsapp = whatsapp_df.iloc[-1]
 
-        # Calculate conversion rates
+        # Check if latest data has values, otherwise use sum of all data
         messages_answered = latest_whatsapp.get('Messages Answered', 0)
-        relevant = latest_whatsapp.get('Relevant', 0)
-        positive = latest_whatsapp.get('Positive', 0)
-        scheduled = latest_whatsapp.get('Scheduled Leads', 0)
+        if messages_answered == 0:
+            # Use total sum if latest day is empty
+            messages_answered = whatsapp_df.get('Messages Answered', pd.Series([0])).sum()
+            relevant = whatsapp_df.get('Relevant', pd.Series([0])).sum()
+            positive = whatsapp_df.get('Positive', pd.Series([0])).sum()
+            scheduled = whatsapp_df.get('Scheduled Leads', pd.Series([0])).sum()
+        else:
+            # Use latest day data
+            relevant = latest_whatsapp.get('Relevant', 0)
+            positive = latest_whatsapp.get('Positive', 0)
+            scheduled = latest_whatsapp.get('Scheduled Leads', 0)
 
         # Conversion rates
         answered_to_relevant = (relevant / messages_answered * 100) if messages_answered > 0 else 0
@@ -2094,7 +2106,7 @@ def main():
             col1, col2 = st.columns([2, 3])
 
             with col1:
-                st.error(f"### 🚨 Critical Bottleneck")
+                st.error(f"### Critical Bottleneck")
                 st.markdown(f"""
                 **{worst['stage']}**
                 - Conversion Rate: **{worst['rate']:.1f}%**
@@ -2102,9 +2114,50 @@ def main():
                 - From: {worst['from']} → To: {worst['to']}
                 """)
 
-                # Recommendation
-                if worst['rate'] < 50:
-                    st.warning("⚠️ **Action Needed:** Focus improvement efforts here for maximum impact!")
+                # Stage-specific recommendations
+                stage_recommendations = {
+                    'Lead → Qualified': """
+**Recommended Actions:**
+- **Improve Lead Quality:** Review lead sources and focus budget on high-converting channels
+- **Speed Up Response:** Respond to new leads within 5 minutes to increase qualification rate
+- **Qualification Criteria:** Ensure qualification criteria align with buyer persona
+- **Lead Scoring:** Implement automated lead scoring to prioritize high-intent leads
+                    """,
+                    'Qualified → Viewing': """
+**Recommended Actions:**
+- **Follow-up Speed:** Contact qualified leads within 24 hours with compelling property options
+- **Viewing Process:** Simplify the viewing scheduling process (online booking, flexible times)
+- **Property Matching:** Use AI to better match qualified leads with suitable properties
+- **Nurture Campaigns:** Create email/WhatsApp sequences to warm up qualified leads
+                    """,
+                    'Viewing → Offer': """
+**Recommended Actions:**
+- **Viewing Experience:** Enhance property presentations (virtual tours, professional staging)
+- **Build Urgency:** Highlight property demand and limited availability during viewings
+- **Address Objections:** Train team to identify and overcome common objections early
+- **Follow-up Timing:** Contact within 4 hours post-viewing while interest is high
+                    """,
+                    'Offer → Accepted': """
+**Recommended Actions:**
+- **Negotiation Training:** Improve team's negotiation skills and offer structuring
+- **Competitive Analysis:** Provide data-driven market insights to justify pricing
+- **Terms Flexibility:** Offer flexible payment terms or incentives where possible
+- **Decision Support:** Help buyers secure financing and expedite approval process
+                    """,
+                    'Accepted → Closed': """
+**Recommended Actions:**
+- **Clear Process:** Streamline closing process with clear timeline and checklist
+- **Documentation:** Ensure all paperwork is prepared in advance to avoid delays
+- **Regular Updates:** Provide weekly status updates to keep momentum
+- **Remove Friction:** Proactively address any concerns or obstacles to closing
+                    """
+                }
+
+                # Display recommendation for the worst bottleneck
+                recommendation = stage_recommendations.get(worst['stage'],
+                    "**Action Needed:** Focus improvement efforts here for maximum impact!")
+
+                st.warning(recommendation)
 
             with col2:
                 st.markdown("#### All Conversion Stages")
@@ -2156,18 +2209,28 @@ def main():
                      delta=f"{projections['current_close_rate']:.1f}% close rate")
 
         with col2:
-            st.markdown("#### 🎯 What-If Scenarios")
+            st.markdown("#### What-If Scenarios")
             st.markdown("*Impact of 10% improvement*")
 
             current_closed = projections['projected_closed']
+            qual_improvement = projections['if_qual_improves_10'] - current_closed
+            viewing_improvement = projections['if_viewing_improves_10'] - current_closed
 
-            st.info(f"**If Qualification improves by 10%:**")
-            st.write(f"Closed Sales: {projections['if_qual_improves_10']} (+{projections['if_qual_improves_10'] - current_closed})")
+            st.info("**If Qualification improves by 10%:**")
+            if qual_improvement > 0:
+                st.write(f"Closed Sales: **{projections['if_qual_improves_10']}** (+{qual_improvement} additional sales)")
+                st.write(f"→ {(qual_improvement / current_closed * 100):.1f}% increase in revenue")
+            else:
+                st.write("Additional data needed for projection")
 
-            st.info(f"**If Viewing Conversion improves by 10%:**")
-            st.write(f"Closed Sales: {projections['if_viewing_improves_10']} (+{projections['if_viewing_improves_10'] - current_closed})")
+            st.info("**If Viewing Conversion improves by 10%:**")
+            if viewing_improvement > 0:
+                st.write(f"Closed Sales: **{projections['if_viewing_improves_10']}** (+{viewing_improvement} additional sales)")
+                st.write(f"→ {(viewing_improvement / current_closed * 100):.1f}% increase in revenue")
+            else:
+                st.write("Additional data needed for projection")
 
-            st.success("💡 **Tip:** Focus on the bottleneck stage for maximum ROI")
+            st.success("**Tip:** Focus on the bottleneck stage for maximum ROI")
 
     # Pipeline Health & Performance Targets
     if (show_pipeline or show_targets) and total > 0:
