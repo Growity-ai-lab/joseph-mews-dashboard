@@ -68,6 +68,21 @@ st.markdown(f"""
         display: none;
     }}
 
+    /* Section spacing */
+    hr {{
+        margin: 1.5rem 0;
+        opacity: 0.3;
+    }}
+
+    h1, h2, h3, h4 {{
+        margin-top: 0.75rem;
+        margin-bottom: 0.75rem;
+    }}
+
+    .stPlotlyChart {{
+        margin-bottom: 0.5rem;
+    }}
+
     /* Smooth transitions for all elements */
     .element-container, .stMarkdown, .stPlotlyChart {{
         animation: fadeInUp 0.6s ease-out;
@@ -99,24 +114,24 @@ st.markdown(f"""
     /* Logo styling with glassmorphism */
     .logo-container {{
         text-align: center;
-        padding: 2.5rem 0 1.5rem 0;
-        margin-bottom: 2rem;
+        padding: 1.5rem 0 1rem 0;
+        margin-bottom: 1.25rem;
         background: {card_bg};
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border: 1px solid {border_color};
-        border-radius: 24px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border-radius: 16px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     }}
 
     .logo-text {{
-        font-size: 4.5rem;
+        font-size: 2.5rem;
         font-weight: 700;
         background: linear-gradient(135deg, #F4B23E 0%, #E09F3E 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        letter-spacing: 2px;
+        letter-spacing: 1.5px;
         margin: 0;
         line-height: 1;
         animation: fadeInUp 0.8s ease-out;
@@ -124,7 +139,7 @@ st.markdown(f"""
 
     /* Main header */
     .main-header {{
-        font-size: 2rem;
+        font-size: 1.5rem;
         font-weight: 600;
         text-align: center;
         margin-bottom: 0.5rem;
@@ -145,10 +160,10 @@ st.markdown(f"""
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border: 1px solid {border_color};
-        padding: 2rem;
-        border-radius: 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        margin-bottom: 1.5rem;
+        padding: 1.25rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        margin-bottom: 0.75rem;
         text-align: center;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
@@ -169,8 +184,8 @@ st.markdown(f"""
     }}
 
     .metric-card:hover {{
-        transform: translateY(-8px) scale(1.02);
-        box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
         border-color: rgba(102, 126, 234, 0.3);
     }}
 
@@ -179,18 +194,18 @@ st.markdown(f"""
     }}
 
     .metric-label {{
-        font-size: 0.875rem;
+        font-size: 0.75rem;
         color: {subtitle_color};
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1.5px;
+        letter-spacing: 1px;
         position: relative;
         z-index: 1;
     }}
 
     .metric-value {{
-        font-size: 3.5rem;
+        font-size: 2rem;
         font-weight: 700;
         color: {text_color};
         line-height: 1;
@@ -204,28 +219,28 @@ st.markdown(f"""
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 2rem 0;
+        margin: 1rem 0;
         flex-wrap: wrap;
-        gap: 1.5rem;
-        padding: 2rem;
+        gap: 1rem;
+        padding: 1.25rem;
         background: {card_bg};
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
-        border-radius: 24px;
+        border-radius: 16px;
         border: 1px solid {border_color};
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
     }}
 
     .flow-metric {{
         background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
-        padding: 1.75rem 2.25rem;
-        border-radius: 16px;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
         border: 1px solid rgba(255, 255, 255, 0.2);
         text-align: center;
-        min-width: 150px;
+        min-width: 120px;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
@@ -244,8 +259,8 @@ st.markdown(f"""
     }}
 
     .flow-metric:hover {{
-        transform: translateY(-4px) scale(1.05);
-        box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
     }}
 
     .flow-metric:hover::before {{
@@ -253,19 +268,19 @@ st.markdown(f"""
     }}
 
     .flow-metric-label {{
-        font-size: 0.875rem;
-        color: rgba(255,255,255,0.95);
-        margin-bottom: 0.75rem;
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.9);
+        margin-bottom: 0.5rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }}
 
     .flow-metric-value {{
-        font-size: 2.75rem;
+        font-size: 1.75rem;
         font-weight: 700;
         color: white;
-        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         animation: countUp 0.6s ease-out;
     }}
 
@@ -273,7 +288,7 @@ st.markdown(f"""
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.25rem;
         color: #667eea;
         font-weight: 700;
         animation: pulse 2s ease-in-out infinite;
@@ -291,12 +306,12 @@ st.markdown(f"""
     }}
 
     .flow-arrow-icon {{
-        font-size: 2.25rem;
+        font-size: 1.5rem;
         filter: drop-shadow(0 2px 4px rgba(102, 126, 234, 0.3));
     }}
 
     .flow-arrow-rate {{
-        font-size: 1.25rem;
+        font-size: 0.9rem;
         font-weight: 700;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
@@ -470,54 +485,54 @@ st.markdown(f"""
         display: inline;
     }}
 
-    /* Temperature Cards */
+    /* Scoring Cards */
     .temp-card {{
         background: linear-gradient(135deg, {{gradient_start}} 0%, {{gradient_end}} 100%);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
         border: 1px solid {border_color};
-        border-radius: 16px;
-        padding: 1.5rem;
+        border-radius: 12px;
+        padding: 1rem;
         text-align: center;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         transition: all 0.3s ease;
         animation: fadeInUp 0.6s ease-out;
     }}
 
     .temp-card:hover {{
-        transform: translateY(-5px);
-        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     }}
 
     .temp-icon {{
-        font-size: 3rem;
-        margin-bottom: 0.5rem;
+        font-size: 2rem;
+        margin-bottom: 0.35rem;
         display: block;
     }}
 
     .temp-label {{
-        font-size: 0.85rem;
+        font-size: 0.7rem;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
         opacity: 0.9;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.35rem;
     }}
 
     .temp-value {{
-        font-size: 2.5rem;
+        font-size: 1.75rem;
         font-weight: bold;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.2rem;
     }}
 
     .temp-percentage {{
-        font-size: 1rem;
+        font-size: 0.85rem;
         opacity: 0.8;
     }}
 
     .temp-conversion {{
-        font-size: 0.8rem;
-        margin-top: 0.75rem;
-        padding-top: 0.75rem;
+        font-size: 0.7rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
         border-top: 1px solid rgba(255, 255, 255, 0.2);
         opacity: 0.9;
     }}
@@ -1150,18 +1165,16 @@ def main():
 
     # Lead Scoring
     st.markdown("---")
-    st.subheader("🎯 Lead Scoring")
+    st.subheader("Lead Scoring")
 
     temp_data = calculate_lead_temperature(metrics)
 
-    # Temperature Cards
+    # Scoring Cards
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        # HOT Leads
         st.markdown(f"""
         <div class="temp-card" style="background: linear-gradient(135deg, rgba(255, 68, 68, 0.15) 0%, rgba(255, 136, 0, 0.15) 100%);">
-            <span class="temp-icon">🔥</span>
             <div class="temp-label" style="color: #ff4444;">Hot Leads</div>
             <div class="temp-value" style="color: #ff4444;">{temp_data['hot']}</div>
             <div class="temp-percentage" style="color: #ff6666;">{temp_data['hot_pct']:.1f}%</div>
@@ -1172,10 +1185,8 @@ def main():
         """, unsafe_allow_html=True)
 
     with col2:
-        # WARM Leads
         st.markdown(f"""
         <div class="temp-card" style="background: linear-gradient(135deg, rgba(255, 170, 0, 0.15) 0%, rgba(255, 196, 0, 0.15) 100%);">
-            <span class="temp-icon">🟡</span>
             <div class="temp-label" style="color: #ffaa00;">Warm Leads</div>
             <div class="temp-value" style="color: #ffaa00;">{temp_data['warm']}</div>
             <div class="temp-percentage" style="color: #ffbb33;">{temp_data['warm_pct']:.1f}%</div>
@@ -1186,10 +1197,8 @@ def main():
         """, unsafe_allow_html=True)
 
     with col3:
-        # COLD Leads
         st.markdown(f"""
         <div class="temp-card" style="background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.15) 100%);">
-            <span class="temp-icon">🧊</span>
             <div class="temp-label" style="color: #4facfe;">Cold Leads</div>
             <div class="temp-value" style="color: #4facfe;">{temp_data['cold']}</div>
             <div class="temp-percentage" style="color: #6fc0ff;">{temp_data['cold_pct']:.1f}%</div>
@@ -1200,48 +1209,44 @@ def main():
         """, unsafe_allow_html=True)
 
     with col4:
-        # Quality Score
         quality_color = "#43e97b" if temp_data['quality_score'] >= 2.0 else "#ffaa00" if temp_data['quality_score'] >= 1.5 else "#ff4444"
         st.markdown(f"""
         <div class="temp-card" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);">
-            <span class="temp-icon">🎯</span>
             <div class="temp-label" style="color: {quality_color};">Quality Score</div>
             <div class="temp-value" style="color: {quality_color};">{temp_data['quality_score']:.2f}</div>
-            <div class="temp-percentage" style="color: {quality_color};">out of 3.00</div>
+            <div class="temp-percentage" style="color: {quality_color};">/ 3.00</div>
             <div class="temp-conversion" style="color: {quality_color};">
-                {"🌟 Excellent" if temp_data['quality_score'] >= 2.0 else "⚡ Good" if temp_data['quality_score'] >= 1.5 else "💡 Improving"}
+                {"Excellent" if temp_data['quality_score'] >= 2.0 else "Good" if temp_data['quality_score'] >= 1.5 else "Improving"}
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    # Temperature Distribution Chart
-    st.markdown("### 📊 Temperature Distribution")
+    # Lead Distribution Chart
+    st.markdown("### Lead Distribution")
 
     col_chart1, col_chart2 = st.columns(2)
 
     with col_chart1:
-        # Pie chart
         fig_pie = go.Figure(data=[go.Pie(
-            labels=['🔥 Hot', '🟡 Warm', '🧊 Cold'],
+            labels=['Hot', 'Warm', 'Cold'],
             values=[temp_data['hot'], temp_data['warm'], temp_data['cold']],
             hole=0.4,
             marker=dict(colors=['#ff4444', '#ffaa00', '#4facfe']),
             textinfo='label+percent',
             textposition='outside',
-            hovertemplate='<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+            hovertemplate='<b>%{label}</b><br>Count: %{value}<br>%{percent}<extra></extra>'
         )])
 
         fig_pie.update_layout(
-            title="Lead Distribution",
-            height=350,
+            title="Distribution by Stage",
+            height=280,
             showlegend=False,
-            margin=dict(l=20, r=20, t=40, b=20)
+            margin=dict(l=10, r=10, t=30, b=10)
         )
 
         st.plotly_chart(fig_pie, use_container_width=True)
 
     with col_chart2:
-        # Conversion funnel by temperature
         fig_bar = go.Figure()
 
         fig_bar.add_trace(go.Bar(
@@ -1259,78 +1264,75 @@ def main():
         ))
 
         fig_bar.update_layout(
-            title="Conversion Rates by Stage",
-            height=350,
+            title="Conversion Rates",
+            height=280,
             showlegend=False,
-            margin=dict(l=20, r=20, t=40, b=20),
-            xaxis=dict(title="Conversion Rate (%)", range=[0, max(100, max(temp_data['cold_to_warm'], temp_data['warm_to_hot'], temp_data['hot_to_close']) * 1.2)])
+            margin=dict(l=10, r=10, t=30, b=10),
+            xaxis=dict(title="Rate (%)", range=[0, max(100, max(temp_data['cold_to_warm'], temp_data['warm_to_hot'], temp_data['hot_to_close']) * 1.2)])
         )
 
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # AI Insight for Temperature
+    # AI Insight for Scoring
     if st.session_state.show_ai_insights and 'temperature' in st.session_state.ai_insights_cache:
-        display_ai_insight("🌡️", st.session_state.ai_insights_cache['temperature'])
+        display_ai_insight("📊", st.session_state.ai_insights_cache['temperature'])
 
-    # Temperature Trends Over Time
+    # Lead Scoring Trends
     if daily_df is not None and not daily_df.empty:
         st.markdown("---")
-        st.markdown("### 📈 Temperature Trends Over Time")
+        st.markdown("### Lead Scoring Trends")
 
         temp_trend_df = calculate_temperature_trend(daily_df)
 
         if temp_trend_df is not None and not temp_trend_df.empty:
             fig_trend = go.Figure()
 
-            # Add Hot leads line
             fig_trend.add_trace(go.Scatter(
                 x=temp_trend_df['Date'],
                 y=temp_trend_df['Hot'],
                 mode='lines+markers',
-                name='🔥 Hot',
-                line=dict(color='#ff4444', width=3),
-                marker=dict(size=8),
+                name='Hot',
+                line=dict(color='#ff4444', width=2.5),
+                marker=dict(size=6),
                 fill='tonexty',
                 fillcolor='rgba(255, 68, 68, 0.1)',
-                hovertemplate='<b>Hot Leads</b><br>Date: %{x}<br>Count: %{y}<extra></extra>'
+                hovertemplate='<b>Hot Leads</b><br>%{x}<br>Count: %{y}<extra></extra>'
             ))
 
-            # Add Warm leads line
             fig_trend.add_trace(go.Scatter(
                 x=temp_trend_df['Date'],
                 y=temp_trend_df['Warm'],
                 mode='lines+markers',
-                name='🟡 Warm',
-                line=dict(color='#ffaa00', width=3),
-                marker=dict(size=8),
+                name='Warm',
+                line=dict(color='#ffaa00', width=2.5),
+                marker=dict(size=6),
                 fill='tonexty',
                 fillcolor='rgba(255, 170, 0, 0.1)',
-                hovertemplate='<b>Warm Leads</b><br>Date: %{x}<br>Count: %{y}<extra></extra>'
+                hovertemplate='<b>Warm Leads</b><br>%{x}<br>Count: %{y}<extra></extra>'
             ))
 
-            # Add Cold leads line
             fig_trend.add_trace(go.Scatter(
                 x=temp_trend_df['Date'],
                 y=temp_trend_df['Cold'],
                 mode='lines+markers',
-                name='🧊 Cold',
-                line=dict(color='#4facfe', width=3),
-                marker=dict(size=8),
+                name='Cold',
+                line=dict(color='#4facfe', width=2.5),
+                marker=dict(size=6),
                 fill='tozeroy',
                 fillcolor='rgba(79, 172, 254, 0.1)',
-                hovertemplate='<b>Cold Leads</b><br>Date: %{x}<br>Count: %{y}<extra></extra>'
+                hovertemplate='<b>Cold Leads</b><br>%{x}<br>Count: %{y}<extra></extra>'
             ))
 
             fig_trend.update_layout(
-                height=400,
-                margin=dict(l=20, r=20, t=20, b=20),
+                height=300,
+                margin=dict(l=10, r=10, t=10, b=40),
                 xaxis_title="Date",
-                yaxis_title="Number of Leads",
+                yaxis_title="Leads",
                 hovermode='x unified',
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
-                    y=1.02,
+                    y=-0.25,
                     xanchor="center",
                     x=0.5
                 )
@@ -1339,7 +1341,7 @@ def main():
             st.plotly_chart(fig_trend, use_container_width=True)
 
             # Quality Score Trend
-            st.markdown("#### 🎯 Quality Score Trend")
+            st.markdown("#### Quality Score Trend")
 
             fig_quality = go.Figure()
 
@@ -1348,22 +1350,21 @@ def main():
                 y=temp_trend_df['Quality Score'],
                 mode='lines+markers',
                 name='Quality Score',
-                line=dict(color='#667eea', width=3),
-                marker=dict(size=10, color=temp_trend_df['Quality Score'], colorscale='RdYlGn', cmin=0, cmax=3, showscale=True),
+                line=dict(color='#667eea', width=2.5),
+                marker=dict(size=8, color=temp_trend_df['Quality Score'], colorscale='RdYlGn', cmin=0, cmax=3, showscale=False),
                 fill='tozeroy',
                 fillcolor='rgba(102, 126, 234, 0.2)',
-                hovertemplate='<b>Quality Score</b><br>Date: %{x}<br>Score: %{y:.2f}/3.00<extra></extra>'
+                hovertemplate='<b>Quality Score</b><br>%{x}<br>%{y:.2f}/3.00<extra></extra>'
             ))
 
-            # Add reference lines
-            fig_quality.add_hline(y=2.0, line_dash="dash", line_color="green", annotation_text="Excellent (2.0)")
-            fig_quality.add_hline(y=1.5, line_dash="dash", line_color="orange", annotation_text="Good (1.5)")
+            fig_quality.add_hline(y=2.0, line_dash="dash", line_color="green", annotation_text="Excellent")
+            fig_quality.add_hline(y=1.5, line_dash="dash", line_color="orange", annotation_text="Good")
 
             fig_quality.update_layout(
-                height=300,
-                margin=dict(l=20, r=20, t=20, b=20),
+                height=250,
+                margin=dict(l=10, r=10, t=10, b=10),
                 xaxis_title="Date",
-                yaxis_title="Quality Score (out of 3.00)",
+                yaxis_title="Score",
                 yaxis=dict(range=[0, 3.2]),
                 hovermode='x unified',
                 showlegend=False
@@ -1376,13 +1377,13 @@ def main():
 
     if source_temp_df is not None and not source_temp_df.empty:
         st.markdown("---")
-        st.markdown("### 🎯 Lead Temperature by Source")
+        st.markdown("### Lead Scoring by Source")
 
         # Source cards
         cols = st.columns(min(len(source_temp_df), 4))
 
         for idx, (_, row) in enumerate(source_temp_df.iterrows()):
-            if idx < 4:  # Limit to 4 columns
+            if idx < 4:
                 with cols[idx]:
                     source = row['Source']
                     quality = row['Quality Score']
@@ -1390,39 +1391,39 @@ def main():
 
                     st.markdown(f"""
                     <div class="temp-card" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);">
-                        <div class="temp-label" style="color: {quality_color}; font-size: 1rem; font-weight: bold; margin-bottom: 0.75rem;">
+                        <div class="temp-label" style="color: {quality_color}; font-size: 0.85rem; font-weight: bold; margin-bottom: 0.5rem;">
                             {source}
                         </div>
-                        <div style="display: flex; justify-content: space-around; margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-around; margin-bottom: 0.4rem;">
                             <div style="text-align: center;">
-                                <div style="font-size: 1.5rem;">🔥</div>
-                                <div style="font-weight: bold; color: #ff4444;">{int(row['Hot'])}</div>
+                                <div style="font-size: 0.65rem; opacity: 0.8;">Hot</div>
+                                <div style="font-weight: bold; color: #ff4444; font-size: 1.1rem;">{int(row['Hot'])}</div>
                             </div>
                             <div style="text-align: center;">
-                                <div style="font-size: 1.5rem;">🟡</div>
-                                <div style="font-weight: bold; color: #ffaa00;">{int(row['Warm'])}</div>
+                                <div style="font-size: 0.65rem; opacity: 0.8;">Warm</div>
+                                <div style="font-weight: bold; color: #ffaa00; font-size: 1.1rem;">{int(row['Warm'])}</div>
                             </div>
                             <div style="text-align: center;">
-                                <div style="font-size: 1.5rem;">🧊</div>
-                                <div style="font-weight: bold; color: #4facfe;">{int(row['Cold'])}</div>
+                                <div style="font-size: 0.65rem; opacity: 0.8;">Cold</div>
+                                <div style="font-weight: bold; color: #4facfe; font-size: 1.1rem;">{int(row['Cold'])}</div>
                             </div>
                         </div>
-                        <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 0.5rem; margin-top: 0.5rem;">
-                            <div style="font-size: 0.8rem; opacity: 0.8;">Total: {int(row['Total'])}</div>
-                            <div style="font-size: 1.2rem; font-weight: bold; color: {quality_color}; margin-top: 0.25rem;">
-                                Score: {quality:.2f}/3.00
+                        <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 0.4rem; margin-top: 0.4rem;">
+                            <div style="font-size: 0.7rem; opacity: 0.8;">Total: {int(row['Total'])}</div>
+                            <div style="font-size: 1rem; font-weight: bold; color: {quality_color}; margin-top: 0.2rem;">
+                                {quality:.2f}/3.00
                             </div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
         # Source comparison chart
-        st.markdown("#### 📊 Source Quality Comparison")
+        st.markdown("#### Source Comparison")
 
         fig_source = go.Figure()
 
         fig_source.add_trace(go.Bar(
-            name='🔥 Hot',
+            name='Hot',
             x=source_temp_df['Source'],
             y=source_temp_df['Hot'],
             marker_color='#ff4444',
@@ -1430,7 +1431,7 @@ def main():
         ))
 
         fig_source.add_trace(go.Bar(
-            name='🟡 Warm',
+            name='Warm',
             x=source_temp_df['Source'],
             y=source_temp_df['Warm'],
             marker_color='#ffaa00',
@@ -1438,7 +1439,7 @@ def main():
         ))
 
         fig_source.add_trace(go.Bar(
-            name='🧊 Cold',
+            name='Cold',
             x=source_temp_df['Source'],
             y=source_temp_df['Cold'],
             marker_color='#4facfe',
@@ -1447,15 +1448,15 @@ def main():
 
         fig_source.update_layout(
             barmode='stack',
-            height=400,
-            margin=dict(l=20, r=20, t=20, b=20),
-            xaxis_title="Lead Source",
-            yaxis_title="Number of Leads",
+            height=300,
+            margin=dict(l=10, r=10, t=10, b=40),
+            xaxis_title="Source",
+            yaxis_title="Leads",
             hovermode='x unified',
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.02,
+                y=-0.25,
                 xanchor="center",
                 x=0.5
             )
@@ -1464,12 +1465,12 @@ def main():
         st.plotly_chart(fig_source, use_container_width=True)
 
     elif daily_df is not None and not daily_df.empty:
-        st.info("💡 **Add Lead Source Tracking:** Add a 'Source' column to your Daily worksheet to track lead quality by platform (Google Ads, Facebook, Instagram, Organic, etc.)")
+        st.info("**Add Source Tracking:** Add a 'Source' column to your Daily worksheet to track lead quality by platform (Google Ads, Facebook, Instagram, Organic, etc.)")
 
     # Visual Funnel Chart
     if show_funnel:
         st.markdown("---")
-        st.subheader("📊 Sales Funnel Visualization")
+        st.subheader("Sales Funnel Visualization")
 
     total = metrics.get('Total Leads', 0)
     if total > 0 and show_funnel:
@@ -1541,7 +1542,7 @@ def main():
     # WhatsApp Metrics
     if whatsapp_df is not None and not whatsapp_df.empty:
         st.markdown("---")
-        st.subheader("💬 WhatsApp Metrics")
+        st.subheader("WhatsApp Metrics")
 
         # Get latest day's data
         latest_whatsapp = whatsapp_df.iloc[-1]
@@ -1819,7 +1820,7 @@ def main():
     # Daily Trends
     if show_trends and daily_df is not None and not daily_df.empty:
         st.markdown("---")
-        st.subheader("📅 Daily Lead Trends")
+        st.subheader("Daily Lead Trends")
 
         # Date range filter
         col1, col2, col3 = st.columns([2, 2, 3])
@@ -2082,7 +2083,7 @@ def main():
     # Bottleneck Analysis
     if show_bottleneck and total > 0:
         st.markdown("---")
-        st.subheader("🔴 Bottleneck Analysis")
+        st.subheader("Bottleneck Analysis")
 
         bottlenecks = calculate_bottleneck(metrics)
 
@@ -2138,7 +2139,7 @@ def main():
     # Projections & Forecasting
     if show_projections and total > 0:
         st.markdown("---")
-        st.subheader("🔮 Projections & Forecasting")
+        st.subheader("Projections & Forecasting")
 
         projections = calculate_projections(metrics)
 
