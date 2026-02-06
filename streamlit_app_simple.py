@@ -437,6 +437,38 @@ st.markdown(f"""
         overflow: hidden;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
     }}
+
+    /* AI Insight Cards */
+    .ai-insight-card {{
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid {border_color};
+        border-left: 4px solid #667eea;
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.1);
+        transition: all 0.3s ease;
+    }}
+
+    .ai-insight-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(102, 126, 234, 0.15);
+    }}
+
+    .ai-insight-icon {{
+        font-size: 1.5rem;
+        margin-right: 0.75rem;
+        vertical-align: middle;
+    }}
+
+    .ai-insight-text {{
+        color: {text_color};
+        line-height: 1.6;
+        font-size: 0.95rem;
+        display: inline;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -629,75 +661,84 @@ def calculate_projections(metrics):
 
     return projections
 
-def generate_ai_insights(metrics, daily_df, whatsapp_df):
-    """Generate AI-powered insights using Claude"""
+def generate_section_insight(section, metrics, daily_df=None, whatsapp_df=None):
+    """Generate AI insight for a specific section"""
     if not AI_AVAILABLE:
-        return "AI insights not available. Please install anthropic package."
+        return None
 
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        return "⚠️ ANTHROPIC_API_KEY not configured. Please add it to environment variables."
+        return None
 
     try:
         client = Anthropic(api_key=api_key)
 
-        # Prepare data summary for Claude
-        total_leads = metrics.get('Total Leads', 0)
-        closed_sales = metrics.get('Closed Sales', 0)
-        close_rate = (closed_sales / total_leads * 100) if total_leads > 0 else 0
+        total = metrics.get('Total Leads', 0)
+        if total == 0:
+            return None
 
-        # Calculate bottleneck
-        bottlenecks = calculate_bottleneck(metrics)
-        worst_bottleneck = bottlenecks[0] if bottlenecks else None
+        # Section-specific prompts
+        if section == "funnel":
+            qualified = metrics.get('Qualified Leads', 0)
+            closed = metrics.get('Closed Sales', 0)
+            close_rate = (closed / total * 100)
 
-        # Daily trends
-        daily_summary = ""
-        if daily_df is not None and not daily_df.empty:
-            recent_days = daily_df.tail(7)
-            daily_summary = f"\n\nRecent 7 days data:\n{recent_days[['Date', 'Total Leads', 'Closed Sales']].to_string()}"
+            prompt = f"""Luxury real estate funnel: {total} leads → {qualified} qualified ({qualified/total*100:.1f}%) → {closed} closed ({close_rate:.1f}%).
 
-        # WhatsApp summary
-        whatsapp_summary = ""
-        if whatsapp_df is not None and not whatsapp_df.empty:
-            latest_wa = whatsapp_df.iloc[-1]
-            whatsapp_summary = f"\n\nWhatsApp Metrics (latest):\n- Messages Answered: {int(latest_wa.get('Messages Answered', 0))}\n- Positive: {int(latest_wa.get('Positive', 0))}\n- Negative: {int(latest_wa.get('Negative', 0))}\n- Scheduled Leads: {int(latest_wa.get('Scheduled Leads', 0))}"
+ONE insight (2-3 sentences): What stands out about this funnel performance? Be specific and actionable."""
 
-        prompt = f"""You are an expert sales analyst for Joseph Mews, a luxury real estate company. Analyze this sales funnel dashboard data and provide actionable insights.
+        elif section == "whatsapp" and whatsapp_df is not None and not whatsapp_df.empty:
+            latest = whatsapp_df.iloc[-1]
+            messages = int(latest.get('Messages Answered', 0))
+            scheduled = int(latest.get('Scheduled Leads', 0))
+            conv_rate = (scheduled / messages * 100) if messages > 0 else 0
 
-**Current Metrics:**
-- Total Leads: {total_leads}
-- Qualified Leads: {metrics.get('Qualified Leads', 0)}
-- Viewings Scheduled: {metrics.get('Viewings Scheduled', 0)}
-- Viewings Completed: {metrics.get('Viewings Completed', 0)}
-- Offers Made: {metrics.get('Offers Made', 0)}
-- Offers Accepted: {metrics.get('Offers Accepted', 0)}
-- Closed Sales: {closed_sales}
-- Overall Close Rate: {close_rate:.1f}%
+            prompt = f"""WhatsApp: {messages} messages → {scheduled} scheduled leads ({conv_rate:.1f}% conversion).
 
-**Biggest Bottleneck:**
-{worst_bottleneck['stage'] if worst_bottleneck else 'N/A'} - {worst_bottleneck['rate']:.1f}% conversion rate (drop-off: {worst_bottleneck['drop_off']} leads) if worst_bottleneck else 'N/A'
-{daily_summary}
-{whatsapp_summary}
+ONE insight (2-3 sentences): How effective is WhatsApp? Be specific and actionable."""
 
-Provide a concise executive summary with:
-1. **Key Wins** (2-3 bullet points - what's working well)
-2. **Areas for Improvement** (2-3 bullet points - what needs attention)
-3. **Actionable Recommendations** (3-4 specific, practical actions)
+        elif section == "bottleneck":
+            bottlenecks = calculate_bottleneck(metrics)
+            worst = bottlenecks[0] if bottlenecks else None
 
-Be specific, data-driven, and focus on luxury real estate sales best practices. Keep the tone professional but encouraging."""
+            if not worst:
+                return None
+
+            prompt = f"""Critical bottleneck: {worst['stage']} at {worst['rate']:.1f}% ({worst['drop_off']} lost leads).
+
+ONE recommendation (2-3 sentences): How to fix this bottleneck? Be specific and actionable."""
+
+        elif section == "trends" and daily_df is not None and not daily_df.empty:
+            recent = daily_df.tail(7)
+            trend_leads = recent['Total Leads'].values[-3:]  # last 3 days
+
+            prompt = f"""7-day trend: Last 3 days had {trend_leads[0]}, {trend_leads[1]}, {trend_leads[2]} leads.
+
+ONE observation (2-3 sentences): What pattern do you see? Be specific."""
+
+        else:
+            return None
 
         message = client.messages.create(
             model="claude-opus-4-20250514",
-            max_tokens=1500,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}]
         )
 
-        return message.content[0].text
+        return message.content[0].text.strip()
 
     except Exception as e:
-        return f"❌ Error generating insights: {str(e)}"
+        return None
+
+def display_ai_insight(icon, text):
+    """Display an AI insight card"""
+    if text:
+        st.markdown(f"""
+        <div class="ai-insight-card">
+            <span class="ai-insight-icon">{icon}</span>
+            <span class="ai-insight-text">{text}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 def main():
     # Dark Mode Toggle
@@ -823,36 +864,30 @@ def main():
     accept_to_close_rate = (closed / offers_accepted * 100) if offers_accepted > 0 else 0
     overall_close_rate = (closed / total * 100) if total > 0 else 0
 
-    # AI Insights Panel
-    st.markdown("---")
+    # Initialize AI insights state
+    if 'show_ai_insights' not in st.session_state:
+        st.session_state.show_ai_insights = False
+    if 'ai_insights_cache' not in st.session_state:
+        st.session_state.ai_insights_cache = {}
+
+    # AI Insights Toggle
     col1, col2 = st.columns([5, 1])
     with col1:
-        st.markdown("### 🤖 AI-Powered Insights")
+        st.markdown("")  # Empty space
     with col2:
-        generate_button = st.button("✨ Generate Insights", key="generate_insights_btn", use_container_width=True)
-
-    if 'ai_insights' not in st.session_state:
-        st.session_state.ai_insights = None
-
-    if generate_button:
-        with st.spinner('🧠 Claude is analyzing your dashboard data...'):
-            st.session_state.ai_insights = generate_ai_insights(metrics, daily_df, whatsapp_df)
-
-    if st.session_state.ai_insights:
-        st.markdown(f"""
-        <div style="background: {card_bg};
-                    backdrop-filter: blur(10px);
-                    -webkit-backdrop-filter: blur(10px);
-                    border: 1px solid {border_color};
-                    border-radius: 16px;
-                    padding: 2rem;
-                    margin: 1.5rem 0;
-                    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);">
-            <div style="color: {text_color}; line-height: 1.8; font-size: 1rem;">
-                {st.session_state.ai_insights.replace(chr(10), '<br>')}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        if st.button(
+            "🤖 AI Insights" if not st.session_state.show_ai_insights else "🤖 Hide AI",
+            key="ai_toggle",
+            use_container_width=True
+        ):
+            st.session_state.show_ai_insights = not st.session_state.show_ai_insights
+            # Generate insights when toggled on
+            if st.session_state.show_ai_insights and not st.session_state.ai_insights_cache:
+                with st.spinner('🧠 Generating AI insights...'):
+                    st.session_state.ai_insights_cache['funnel'] = generate_section_insight('funnel', metrics)
+                    st.session_state.ai_insights_cache['whatsapp'] = generate_section_insight('whatsapp', metrics, whatsapp_df=whatsapp_df)
+                    st.session_state.ai_insights_cache['bottleneck'] = generate_section_insight('bottleneck', metrics)
+                    st.session_state.ai_insights_cache['trends'] = generate_section_insight('trends', metrics, daily_df=daily_df)
 
     # Sales Funnel Flow Chart
     st.markdown("---")
@@ -936,6 +971,10 @@ def main():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # AI Insight for Funnel
+    if st.session_state.show_ai_insights and 'funnel' in st.session_state.ai_insights_cache:
+        display_ai_insight("💡", st.session_state.ai_insights_cache['funnel'])
 
     # Visual Funnel Chart
     if show_funnel:
@@ -1283,6 +1322,10 @@ def main():
 
             st.plotly_chart(fig, use_container_width=True)
 
+        # AI Insight for WhatsApp
+        if st.session_state.show_ai_insights and 'whatsapp' in st.session_state.ai_insights_cache:
+            display_ai_insight("💬", st.session_state.ai_insights_cache['whatsapp'])
+
     # Daily Trends
     if show_trends and daily_df is not None and not daily_df.empty:
         st.markdown("---")
@@ -1536,6 +1579,10 @@ def main():
             )
 
             st.plotly_chart(fig, use_container_width=True)
+
+            # AI Insight for Trends
+            if st.session_state.show_ai_insights and 'trends' in st.session_state.ai_insights_cache:
+                display_ai_insight("📈", st.session_state.ai_insights_cache['trends'])
         else:
             st.warning("No data available for selected date range")
 
@@ -1593,6 +1640,10 @@ def main():
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
+
+        # AI Insight for Bottleneck
+        if st.session_state.show_ai_insights and 'bottleneck' in st.session_state.ai_insights_cache:
+            display_ai_insight("🔴", st.session_state.ai_insights_cache['bottleneck'])
 
     # Projections & Forecasting
     if show_projections and total > 0:
