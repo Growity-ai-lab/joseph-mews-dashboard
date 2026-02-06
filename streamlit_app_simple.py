@@ -760,6 +760,67 @@ def calculate_lead_temperature(metrics):
         'quality_score': (hot * 3 + warm * 2 + cold * 1) / total if total > 0 else 0
     }
 
+def calculate_temperature_trend(daily_df):
+    """Calculate temperature distribution over time from daily data"""
+    if daily_df is None or daily_df.empty:
+        return None
+
+    trends = []
+    for _, row in daily_df.iterrows():
+        metrics = {
+            'Total Leads': row.get('Total Leads', 0),
+            'Qualified Leads': row.get('Qualified Leads', 0),
+            'Viewings Scheduled': row.get('Viewings Scheduled', 0),
+            'Viewings Completed': row.get('Viewings Completed', 0),
+            'Offers Made': row.get('Offers Made', 0),
+            'Offers Accepted': row.get('Offers Accepted', 0),
+            'Closed Sales': row.get('Closed Sales', 0)
+        }
+        temp = calculate_lead_temperature(metrics)
+        trends.append({
+            'Date': row['Date'],
+            'Hot': temp['hot'],
+            'Warm': temp['warm'],
+            'Cold': temp['cold'],
+            'Quality Score': temp['quality_score']
+        })
+
+    return pd.DataFrame(trends)
+
+def calculate_temperature_by_source(daily_df):
+    """Calculate temperature distribution by lead source"""
+    if daily_df is None or daily_df.empty or 'Source' not in daily_df.columns:
+        return None
+
+    sources = daily_df['Source'].unique()
+    source_temps = []
+
+    for source in sources:
+        source_data = daily_df[daily_df['Source'] == source]
+
+        # Sum all metrics for this source
+        metrics = {
+            'Total Leads': source_data.get('Total Leads', pd.Series([0])).sum(),
+            'Qualified Leads': source_data.get('Qualified Leads', pd.Series([0])).sum(),
+            'Viewings Scheduled': source_data.get('Viewings Scheduled', pd.Series([0])).sum(),
+            'Viewings Completed': source_data.get('Viewings Completed', pd.Series([0])).sum(),
+            'Offers Made': source_data.get('Offers Made', pd.Series([0])).sum(),
+            'Offers Accepted': source_data.get('Offers Accepted', pd.Series([0])).sum(),
+            'Closed Sales': source_data.get('Closed Sales', pd.Series([0])).sum()
+        }
+
+        temp = calculate_lead_temperature(metrics)
+        source_temps.append({
+            'Source': source,
+            'Hot': temp['hot'],
+            'Warm': temp['warm'],
+            'Cold': temp['cold'],
+            'Total': metrics['Total Leads'],
+            'Quality Score': temp['quality_score']
+        })
+
+    return pd.DataFrame(source_temps).sort_values('Quality Score', ascending=False)
+
 def generate_section_insight(section, metrics, daily_df=None, whatsapp_df=None):
     """Generate AI insight for a specific section"""
     if not AI_AVAILABLE:
@@ -1087,9 +1148,9 @@ def main():
     if st.session_state.show_ai_insights and 'funnel' in st.session_state.ai_insights_cache:
         display_ai_insight("💡", st.session_state.ai_insights_cache['funnel'])
 
-    # Lead Temperature Distribution
+    # Lead Scoring
     st.markdown("---")
-    st.subheader("🌡️ Lead Temperature Distribution")
+    st.subheader("🎯 Lead Scoring")
 
     temp_data = calculate_lead_temperature(metrics)
 
@@ -1210,6 +1271,200 @@ def main():
     # AI Insight for Temperature
     if st.session_state.show_ai_insights and 'temperature' in st.session_state.ai_insights_cache:
         display_ai_insight("🌡️", st.session_state.ai_insights_cache['temperature'])
+
+    # Temperature Trends Over Time
+    if daily_df is not None and not daily_df.empty:
+        st.markdown("---")
+        st.markdown("### 📈 Temperature Trends Over Time")
+
+        temp_trend_df = calculate_temperature_trend(daily_df)
+
+        if temp_trend_df is not None and not temp_trend_df.empty:
+            fig_trend = go.Figure()
+
+            # Add Hot leads line
+            fig_trend.add_trace(go.Scatter(
+                x=temp_trend_df['Date'],
+                y=temp_trend_df['Hot'],
+                mode='lines+markers',
+                name='🔥 Hot',
+                line=dict(color='#ff4444', width=3),
+                marker=dict(size=8),
+                fill='tonexty',
+                fillcolor='rgba(255, 68, 68, 0.1)',
+                hovertemplate='<b>Hot Leads</b><br>Date: %{x}<br>Count: %{y}<extra></extra>'
+            ))
+
+            # Add Warm leads line
+            fig_trend.add_trace(go.Scatter(
+                x=temp_trend_df['Date'],
+                y=temp_trend_df['Warm'],
+                mode='lines+markers',
+                name='🟡 Warm',
+                line=dict(color='#ffaa00', width=3),
+                marker=dict(size=8),
+                fill='tonexty',
+                fillcolor='rgba(255, 170, 0, 0.1)',
+                hovertemplate='<b>Warm Leads</b><br>Date: %{x}<br>Count: %{y}<extra></extra>'
+            ))
+
+            # Add Cold leads line
+            fig_trend.add_trace(go.Scatter(
+                x=temp_trend_df['Date'],
+                y=temp_trend_df['Cold'],
+                mode='lines+markers',
+                name='🧊 Cold',
+                line=dict(color='#4facfe', width=3),
+                marker=dict(size=8),
+                fill='tozeroy',
+                fillcolor='rgba(79, 172, 254, 0.1)',
+                hovertemplate='<b>Cold Leads</b><br>Date: %{x}<br>Count: %{y}<extra></extra>'
+            ))
+
+            fig_trend.update_layout(
+                height=400,
+                margin=dict(l=20, r=20, t=20, b=20),
+                xaxis_title="Date",
+                yaxis_title="Number of Leads",
+                hovermode='x unified',
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
+
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+            # Quality Score Trend
+            st.markdown("#### 🎯 Quality Score Trend")
+
+            fig_quality = go.Figure()
+
+            fig_quality.add_trace(go.Scatter(
+                x=temp_trend_df['Date'],
+                y=temp_trend_df['Quality Score'],
+                mode='lines+markers',
+                name='Quality Score',
+                line=dict(color='#667eea', width=3),
+                marker=dict(size=10, color=temp_trend_df['Quality Score'], colorscale='RdYlGn', cmin=0, cmax=3, showscale=True),
+                fill='tozeroy',
+                fillcolor='rgba(102, 126, 234, 0.2)',
+                hovertemplate='<b>Quality Score</b><br>Date: %{x}<br>Score: %{y:.2f}/3.00<extra></extra>'
+            ))
+
+            # Add reference lines
+            fig_quality.add_hline(y=2.0, line_dash="dash", line_color="green", annotation_text="Excellent (2.0)")
+            fig_quality.add_hline(y=1.5, line_dash="dash", line_color="orange", annotation_text="Good (1.5)")
+
+            fig_quality.update_layout(
+                height=300,
+                margin=dict(l=20, r=20, t=20, b=20),
+                xaxis_title="Date",
+                yaxis_title="Quality Score (out of 3.00)",
+                yaxis=dict(range=[0, 3.2]),
+                hovermode='x unified',
+                showlegend=False
+            )
+
+            st.plotly_chart(fig_quality, use_container_width=True)
+
+    # Lead Source Breakdown
+    source_temp_df = calculate_temperature_by_source(daily_df)
+
+    if source_temp_df is not None and not source_temp_df.empty:
+        st.markdown("---")
+        st.markdown("### 🎯 Lead Temperature by Source")
+
+        # Source cards
+        cols = st.columns(min(len(source_temp_df), 4))
+
+        for idx, (_, row) in enumerate(source_temp_df.iterrows()):
+            if idx < 4:  # Limit to 4 columns
+                with cols[idx]:
+                    source = row['Source']
+                    quality = row['Quality Score']
+                    quality_color = "#43e97b" if quality >= 2.0 else "#ffaa00" if quality >= 1.5 else "#ff4444"
+
+                    st.markdown(f"""
+                    <div class="temp-card" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);">
+                        <div class="temp-label" style="color: {quality_color}; font-size: 1rem; font-weight: bold; margin-bottom: 0.75rem;">
+                            {source}
+                        </div>
+                        <div style="display: flex; justify-content: space-around; margin-bottom: 0.5rem;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem;">🔥</div>
+                                <div style="font-weight: bold; color: #ff4444;">{int(row['Hot'])}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem;">🟡</div>
+                                <div style="font-weight: bold; color: #ffaa00;">{int(row['Warm'])}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem;">🧊</div>
+                                <div style="font-weight: bold; color: #4facfe;">{int(row['Cold'])}</div>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 0.5rem; margin-top: 0.5rem;">
+                            <div style="font-size: 0.8rem; opacity: 0.8;">Total: {int(row['Total'])}</div>
+                            <div style="font-size: 1.2rem; font-weight: bold; color: {quality_color}; margin-top: 0.25rem;">
+                                Score: {quality:.2f}/3.00
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # Source comparison chart
+        st.markdown("#### 📊 Source Quality Comparison")
+
+        fig_source = go.Figure()
+
+        fig_source.add_trace(go.Bar(
+            name='🔥 Hot',
+            x=source_temp_df['Source'],
+            y=source_temp_df['Hot'],
+            marker_color='#ff4444',
+            hovertemplate='<b>%{x}</b><br>Hot: %{y}<extra></extra>'
+        ))
+
+        fig_source.add_trace(go.Bar(
+            name='🟡 Warm',
+            x=source_temp_df['Source'],
+            y=source_temp_df['Warm'],
+            marker_color='#ffaa00',
+            hovertemplate='<b>%{x}</b><br>Warm: %{y}<extra></extra>'
+        ))
+
+        fig_source.add_trace(go.Bar(
+            name='🧊 Cold',
+            x=source_temp_df['Source'],
+            y=source_temp_df['Cold'],
+            marker_color='#4facfe',
+            hovertemplate='<b>%{x}</b><br>Cold: %{y}<extra></extra>'
+        ))
+
+        fig_source.update_layout(
+            barmode='stack',
+            height=400,
+            margin=dict(l=20, r=20, t=20, b=20),
+            xaxis_title="Lead Source",
+            yaxis_title="Number of Leads",
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5
+            )
+        )
+
+        st.plotly_chart(fig_source, use_container_width=True)
+
+    elif daily_df is not None and not daily_df.empty:
+        st.info("💡 **Add Lead Source Tracking:** Add a 'Source' column to your Daily worksheet to track lead quality by platform (Google Ads, Facebook, Instagram, Organic, etc.)")
 
     # Visual Funnel Chart
     if show_funnel:
