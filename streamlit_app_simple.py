@@ -14,6 +14,12 @@ try:
 except ImportError:
     GOOGLE_SHEETS_AVAILABLE = False
 
+try:
+    from anthropic import Anthropic
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+
 # Page config
 st.set_page_config(
     page_title="Joseph Mews Lead Funnel Dashboard",
@@ -623,6 +629,76 @@ def calculate_projections(metrics):
 
     return projections
 
+def generate_ai_insights(metrics, daily_df, whatsapp_df):
+    """Generate AI-powered insights using Claude"""
+    if not AI_AVAILABLE:
+        return "AI insights not available. Please install anthropic package."
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return "⚠️ ANTHROPIC_API_KEY not configured. Please add it to environment variables."
+
+    try:
+        client = Anthropic(api_key=api_key)
+
+        # Prepare data summary for Claude
+        total_leads = metrics.get('Total Leads', 0)
+        closed_sales = metrics.get('Closed Sales', 0)
+        close_rate = (closed_sales / total_leads * 100) if total_leads > 0 else 0
+
+        # Calculate bottleneck
+        bottlenecks = calculate_bottleneck(metrics)
+        worst_bottleneck = bottlenecks[0] if bottlenecks else None
+
+        # Daily trends
+        daily_summary = ""
+        if daily_df is not None and not daily_df.empty:
+            recent_days = daily_df.tail(7)
+            daily_summary = f"\n\nRecent 7 days data:\n{recent_days[['Date', 'Total Leads', 'Closed Sales']].to_string()}"
+
+        # WhatsApp summary
+        whatsapp_summary = ""
+        if whatsapp_df is not None and not whatsapp_df.empty:
+            latest_wa = whatsapp_df.iloc[-1]
+            whatsapp_summary = f"\n\nWhatsApp Metrics (latest):\n- Messages Answered: {int(latest_wa.get('Messages Answered', 0))}\n- Positive: {int(latest_wa.get('Positive', 0))}\n- Negative: {int(latest_wa.get('Negative', 0))}\n- Scheduled Leads: {int(latest_wa.get('Scheduled Leads', 0))}"
+
+        prompt = f"""You are an expert sales analyst for Joseph Mews, a luxury real estate company. Analyze this sales funnel dashboard data and provide actionable insights.
+
+**Current Metrics:**
+- Total Leads: {total_leads}
+- Qualified Leads: {metrics.get('Qualified Leads', 0)}
+- Viewings Scheduled: {metrics.get('Viewings Scheduled', 0)}
+- Viewings Completed: {metrics.get('Viewings Completed', 0)}
+- Offers Made: {metrics.get('Offers Made', 0)}
+- Offers Accepted: {metrics.get('Offers Accepted', 0)}
+- Closed Sales: {closed_sales}
+- Overall Close Rate: {close_rate:.1f}%
+
+**Biggest Bottleneck:**
+{worst_bottleneck['stage'] if worst_bottleneck else 'N/A'} - {worst_bottleneck['rate']:.1f}% conversion rate (drop-off: {worst_bottleneck['drop_off']} leads) if worst_bottleneck else 'N/A'
+{daily_summary}
+{whatsapp_summary}
+
+Provide a concise executive summary with:
+1. **Key Wins** (2-3 bullet points - what's working well)
+2. **Areas for Improvement** (2-3 bullet points - what needs attention)
+3. **Actionable Recommendations** (3-4 specific, practical actions)
+
+Be specific, data-driven, and focus on luxury real estate sales best practices. Keep the tone professional but encouraging."""
+
+        message = client.messages.create(
+            model="claude-opus-4-20250514",
+            max_tokens=1500,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        return message.content[0].text
+
+    except Exception as e:
+        return f"❌ Error generating insights: {str(e)}"
+
 def main():
     # Dark Mode Toggle
     col_left, col_center, col_right = st.columns([4, 1, 1])
@@ -747,7 +823,39 @@ def main():
     accept_to_close_rate = (closed / offers_accepted * 100) if offers_accepted > 0 else 0
     overall_close_rate = (closed / total * 100) if total > 0 else 0
 
+    # AI Insights Panel
+    st.markdown("---")
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        st.markdown("### 🤖 AI-Powered Insights")
+    with col2:
+        generate_button = st.button("✨ Generate Insights", key="generate_insights_btn", use_container_width=True)
+
+    if 'ai_insights' not in st.session_state:
+        st.session_state.ai_insights = None
+
+    if generate_button:
+        with st.spinner('🧠 Claude is analyzing your dashboard data...'):
+            st.session_state.ai_insights = generate_ai_insights(metrics, daily_df, whatsapp_df)
+
+    if st.session_state.ai_insights:
+        st.markdown(f"""
+        <div style="background: {card_bg};
+                    backdrop-filter: blur(10px);
+                    -webkit-backdrop-filter: blur(10px);
+                    border: 1px solid {border_color};
+                    border-radius: 16px;
+                    padding: 2rem;
+                    margin: 1.5rem 0;
+                    box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);">
+            <div style="color: {text_color}; line-height: 1.8; font-size: 1rem;">
+                {st.session_state.ai_insights.replace(chr(10), '<br>')}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # Sales Funnel Flow Chart
+    st.markdown("---")
     st.markdown("### 📊 Sales Funnel Flow")
 
     # Row 1: Total Leads → Qualified → Viewings Scheduled → Viewings Completed
