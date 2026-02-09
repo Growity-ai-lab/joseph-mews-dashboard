@@ -909,6 +909,25 @@ ONE observation (2-3 sentences): What pattern do you see? Be specific."""
 
 ONE insight (2-3 sentences): What does this temperature distribution tell us about lead quality? Be specific and actionable."""
 
+        elif section == "funnel_viz":
+            # Calculate stage-by-stage conversion rates
+            total = metrics.get('Total Leads', 0)
+            qualified = metrics.get('Qualified Leads', 0)
+            viewings = metrics.get('Viewings Completed', 0)
+            offers = metrics.get('Offers Made', 0)
+            accepted = metrics.get('Offers Accepted', 0)
+            closed = metrics.get('Closed Sales', 0)
+
+            qual_rate = (qualified / total * 100) if total > 0 else 0
+            view_rate = (viewings / qualified * 100) if qualified > 0 else 0
+            offer_rate = (offers / viewings * 100) if viewings > 0 else 0
+            accept_rate = (accepted / offers * 100) if offers > 0 else 0
+            close_rate = (closed / accepted * 100) if accepted > 0 else 0
+
+            prompt = f"""Funnel stage conversion rates: Lead→Qualified {qual_rate:.1f}%, Qualified→Viewing {view_rate:.1f}%, Viewing→Offer {offer_rate:.1f}%, Offer→Accepted {accept_rate:.1f}%, Accepted→Closed {close_rate:.1f}%.
+
+ONE insight (2-3 sentences): Which stage has the weakest conversion? What's the overall pattern - is any rate particularly low (<30%), average (30-70%), or strong (>70%)? Be specific."""
+
         else:
             return None
 
@@ -1078,6 +1097,7 @@ def main():
             if st.session_state.show_ai_insights and not st.session_state.ai_insights_cache:
                 with st.spinner('🧠 Generating AI insights...'):
                     st.session_state.ai_insights_cache['funnel'] = generate_section_insight('funnel', metrics)
+                    st.session_state.ai_insights_cache['funnel_viz'] = generate_section_insight('funnel_viz', metrics)
                     st.session_state.ai_insights_cache['temperature'] = generate_section_insight('temperature', metrics)
                     st.session_state.ai_insights_cache['whatsapp'] = generate_section_insight('whatsapp', metrics, whatsapp_df=whatsapp_df)
                     st.session_state.ai_insights_cache['bottleneck'] = generate_section_insight('bottleneck', metrics)
@@ -1167,9 +1187,106 @@ def main():
     if st.session_state.show_ai_insights and 'funnel' in st.session_state.ai_insights_cache:
         display_ai_insight("💡", st.session_state.ai_insights_cache['funnel'])
 
+    # Visual Funnel Chart
+    if show_funnel:
+        st.markdown("---")
+        st.subheader("Sales Funnel Visualization")
+
+        total = metrics.get('Total Leads', 0)
+        if total > 0:
+            # Create funnel data
+            funnel_data = {
+                'Stage': [
+                    'Total Leads',
+                    'Qualified Leads',
+                    'Viewings Completed',
+                    'Offers Made',
+                    'Offers Accepted',
+                    'Closed Sales'
+                ],
+                'Count': [
+                    metrics.get('Total Leads', 0),
+                    metrics.get('Qualified Leads', 0),
+                    metrics.get('Viewings Completed', 0),
+                    metrics.get('Offers Made', 0),
+                    metrics.get('Offers Accepted', 0),
+                    metrics.get('Closed Sales', 0)
+                ]
+            }
+
+            # Create two columns for funnel and progress bars
+            col_funnel, col_progress = st.columns([3, 2])
+
+            with col_funnel:
+                # Create Plotly funnel chart
+                fig = go.Figure(go.Funnel(
+                    y=funnel_data['Stage'],
+                    x=funnel_data['Count'],
+                    textposition="inside",
+                    textinfo="value+percent initial",
+                    marker={
+                        "color": ["#667eea", "#764ba2", "#f093fb", "#4facfe", "#00f2fe", "#43e97b"],
+                        "line": {"width": 2, "color": "white"}
+                    },
+                    connector={"line": {"color": "#667eea", "dash": "dot", "width": 3}}
+                ))
+
+                fig.update_layout(
+                    height=500,
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(size=14, color='#333')
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col_progress:
+                st.markdown("#### Stage Conversion Rates")
+
+                # Progress bars for each stage
+                stages_progress = [
+                    ("Qualified", metrics.get('Qualified Leads', 0), total),
+                    ("Viewings", metrics.get('Viewings Completed', 0), total),
+                    ("Offers", metrics.get('Offers Made', 0), total),
+                    ("Accepted", metrics.get('Offers Accepted', 0), total),
+                    ("Closed", metrics.get('Closed Sales', 0), total),
+                ]
+
+                for stage_name, stage_count, total_count in stages_progress:
+                    percentage = (stage_count / total_count * 100) if total_count > 0 else 0
+                    st.markdown(f"**{stage_name}**: {stage_count} ({percentage:.1f}%)")
+                    st.progress(percentage / 100)
+                    st.markdown("")  # spacing
+
+        # AI Insight for Funnel Visualization
+        if st.session_state.show_ai_insights and 'funnel_viz' in st.session_state.ai_insights_cache:
+            display_ai_insight("📊", st.session_state.ai_insights_cache['funnel_viz'])
+
     # Lead Scoring
     st.markdown("---")
     st.subheader("Lead Scoring")
+
+    with st.expander("ℹ️ How is Lead Scoring calculated?"):
+        st.markdown("""
+        **Lead scoring categorizes leads based on their position in the sales funnel:**
+
+        - **Hot Leads (Red):** Ready to close
+          - Completed viewing + in offer stage
+          - High purchase intent, immediate attention needed
+
+        - **Warm Leads (Yellow):** Actively engaged
+          - Qualified + in viewing stage
+          - Interested but needs nurturing
+
+        - **Cold Leads (Blue):** Early stage
+          - New leads, not yet qualified
+          - Requires initial outreach and qualification
+
+        - **Quality Score (0-3.0):** Weighted average
+          - Formula: (Hot × 3 + Warm × 2 + Cold × 1) / Total Leads
+          - Higher score = better lead quality distribution
+        """)
 
     temp_data = calculate_lead_temperature(metrics)
 
@@ -1470,78 +1587,6 @@ def main():
 
     elif daily_df is not None and not daily_df.empty:
         st.info("**Add Source Tracking:** Add a 'Source' column to your Daily worksheet to track lead quality by platform (Google Ads, Facebook, Instagram, Organic, etc.)")
-
-    # Visual Funnel Chart
-    if show_funnel:
-        st.markdown("---")
-        st.subheader("Sales Funnel Visualization")
-
-    total = metrics.get('Total Leads', 0)
-    if total > 0 and show_funnel:
-        # Create funnel data
-        funnel_data = {
-            'Stage': [
-                'Total Leads',
-                'Qualified Leads',
-                'Viewings Completed',
-                'Offers Made',
-                'Offers Accepted',
-                'Closed Sales'
-            ],
-            'Count': [
-                metrics.get('Total Leads', 0),
-                metrics.get('Qualified Leads', 0),
-                metrics.get('Viewings Completed', 0),
-                metrics.get('Offers Made', 0),
-                metrics.get('Offers Accepted', 0),
-                metrics.get('Closed Sales', 0)
-            ]
-        }
-
-        # Create two columns for funnel and progress bars
-        col_funnel, col_progress = st.columns([3, 2])
-
-        with col_funnel:
-            # Create Plotly funnel chart
-            fig = go.Figure(go.Funnel(
-                y=funnel_data['Stage'],
-                x=funnel_data['Count'],
-                textposition="inside",
-                textinfo="value+percent initial",
-                marker={
-                    "color": ["#667eea", "#764ba2", "#f093fb", "#4facfe", "#00f2fe", "#43e97b"],
-                    "line": {"width": 2, "color": "white"}
-                },
-                connector={"line": {"color": "#667eea", "dash": "dot", "width": 3}}
-            ))
-
-            fig.update_layout(
-                height=500,
-                margin=dict(l=20, r=20, t=20, b=20),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(size=14, color='#333')
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col_progress:
-            st.markdown("#### Stage Conversion Rates")
-
-            # Progress bars for each stage
-            stages_progress = [
-                ("Qualified", metrics.get('Qualified Leads', 0), total),
-                ("Viewings", metrics.get('Viewings Completed', 0), total),
-                ("Offers", metrics.get('Offers Made', 0), total),
-                ("Accepted", metrics.get('Offers Accepted', 0), total),
-                ("Closed", metrics.get('Closed Sales', 0), total),
-            ]
-
-            for stage_name, stage_count, total_count in stages_progress:
-                percentage = (stage_count / total_count * 100) if total_count > 0 else 0
-                st.markdown(f"**{stage_name}**: {stage_count} ({percentage:.1f}%)")
-                st.progress(percentage / 100)
-                st.markdown("")  # spacing
 
     # WhatsApp Metrics
     if whatsapp_df is not None and not whatsapp_df.empty:
@@ -2194,6 +2239,22 @@ def main():
         st.markdown("---")
         st.subheader("Projections & Forecasting")
 
+        with st.expander("ℹ️ How are these projections calculated?"):
+            st.markdown("""
+            **These are data-driven projections, not random estimates:**
+
+            - **Based on Historical Performance:** Uses your actual conversion rates from current data
+            - **Next 100 Leads:** Projects outcomes if you receive 100 new leads with current conversion patterns
+            - **What-If Scenarios:** Calculates impact of improving specific stages by 10%
+
+            **Formula:**
+            - Current close rate = Closed Sales / Total Leads
+            - Projected closed = 100 leads × current close rate
+            - What-if = (Stage count × 1.1) × (stage-to-close conversion rate)
+
+            **Note:** Projections assume conversion rates remain consistent. Actual results may vary based on lead quality, market conditions, and sales efforts.
+            """)
+
         projections = calculate_projections(metrics)
 
         col1, col2 = st.columns(2)
@@ -2217,18 +2278,20 @@ def main():
             viewing_improvement = projections['if_viewing_improves_10'] - current_closed
 
             st.info("**If Qualification improves by 10%:**")
-            if qual_improvement > 0:
+            if current_closed > 0 and qual_improvement >= 0:
                 st.write(f"Closed Sales: **{projections['if_qual_improves_10']}** (+{qual_improvement} additional sales)")
-                st.write(f"→ {(qual_improvement / current_closed * 100):.1f}% increase in revenue")
+                if qual_improvement > 0:
+                    st.write(f"→ {(qual_improvement / current_closed * 100):.1f}% increase in revenue")
             else:
-                st.write("Additional data needed for projection")
+                st.write("Insufficient data for projection")
 
             st.info("**If Viewing Conversion improves by 10%:**")
-            if viewing_improvement > 0:
+            if current_closed > 0 and viewing_improvement >= 0:
                 st.write(f"Closed Sales: **{projections['if_viewing_improves_10']}** (+{viewing_improvement} additional sales)")
-                st.write(f"→ {(viewing_improvement / current_closed * 100):.1f}% increase in revenue")
+                if viewing_improvement > 0:
+                    st.write(f"→ {(viewing_improvement / current_closed * 100):.1f}% increase in revenue")
             else:
-                st.write("Additional data needed for projection")
+                st.write("Insufficient data for projection")
 
             st.success("**Tip:** Focus on the bottleneck stage for maximum ROI")
 
@@ -2239,7 +2302,8 @@ def main():
 
         if show_pipeline:
             with col1:
-                st.markdown("#### 📊 Pipeline Health")
+                st.markdown("#### Pipeline Health")
+                st.caption("Shows active leads currently in each stage of the sales process")
                 pipeline_stages = [
                     ("In Viewings", metrics.get('Viewings Scheduled', 0) + metrics.get('Viewings Completed', 0)),
                     ("In Negotiation", metrics.get('Offers Made', 0) + metrics.get('Offers Accepted', 0)),
@@ -2286,7 +2350,7 @@ def main():
     <div class="footer">
         🔒 GDPR Compliant Dashboard • No Personal Data Stored or Displayed
         <br>
-        Joseph Mews © 2024 • All Rights Reserved
+        Joseph Mews © 2026 • All Rights Reserved
     </div>
     """, unsafe_allow_html=True)
 
