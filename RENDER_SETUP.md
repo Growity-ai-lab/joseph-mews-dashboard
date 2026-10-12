@@ -24,7 +24,13 @@ GCP_SERVICE_ACCOUNT_AUTH_PROVIDER_X509_CERT_URL=https://www.googleapis.com/oauth
 GCP_SERVICE_ACCOUNT_CLIENT_X509_CERT_URL=your-cert-url
 ```
 
-## Streamlit Secrets'a Erişim
+## Diğer değişkenler
 
-Eğer environment variables kullanıyorsanız, streamlit_app_v2.py'de secrets yerine
-environment variables'dan okuyun.
+```
+GOOGLE_SHEETS_URL=https://docs.google.com/spreadsheets/d/...
+ANTHROPIC_API_KEY=...        # Claude özellikleri için (AI insights, rapor, lead skorlama, sohbet)
+BRAND_NAME=Joseph Mews       # İsteğe bağlı: müşteri adı, renkler vb. için README'deki BRAND_* değişkenleri
+```
+
+`GOOGLE_SHEETS_URL` tanımlı değilse dashboard demo verisiyle açılır. Uygulama önce environment
+variables'a, yoksa `.streamlit/secrets.toml` dosyasına bakar.
