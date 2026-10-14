@@ -1,217 +1,110 @@
-# Joseph Mews Dashboard
+# Lead Funnel Dashboard
 
-Modern sales funnel tracking dashboard built with Streamlit, integrated with Google Sheets for real-time lead management.
+A Streamlit dashboard for lead-generation projects: funnel performance, lead scoring, channels,
+trends and forecasts, with Claude (Opus 5.5) built in. Data comes from Google Sheets; without a sheet
+it runs on built-in demo data whose dates always end today, so it is ready for client demos.
 
-## Features
+It is white-label: the client name, colours, currency and targets come from `brand.json` or
+environment variables.
 
-### 🎯 Admin Dashboard
-- Complete sales funnel analytics
-- Performance metrics and KPIs
-- Lead source analysis
-- Agent performance leaderboard
-- Recent lead activity tracking
+## What's inside
 
-### 🏘️ Client Dashboard
-- Campaign performance overview
-- Lead pipeline visualization
-- Source breakdown and analytics
-- Top performing campaigns
-- Real-time conversion metrics
+| Tab | Contents |
+|-----|----------|
+| **Overview** | KPI row with change vs the previous period, funnel at a glance, executive report, priority actions |
+| **Funnel & Scoring** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, Hot/Warm/Cold lead scoring, open-lead table |
+| **Channels** | WhatsApp conversion flow and conversation quality, performance by lead source |
+| **Trends** | Daily leads and sales with 7-day averages, lead mix over time, spend and cost per lead |
+| **Forecast** | Expected outcomes for the next N leads, what-if per conversion step, pipeline health, targets |
+| **Ask AI** | Chat with Claude about the figures on the dashboard |
 
-### 👤 Agent Dashboard
-- Personal lead management
-- Today's follow-up reminders
-- Individual performance tracking
-- Lead filtering by stage
-- Contact information quick access
+A **reporting period** selector (last 7/30/90 days, custom range or all time) filters every tab, and
+the header shows the exact dates covered.
 
-## Quick Start
+### Claude features
 
-### Prerequisites
-- Python 3.11 or higher
-- Google Cloud Platform account (for Google Sheets integration)
-- Google Sheets with "Lead Tracker" worksheet
+All features use `claude-opus-5-5` with server-side fallback enabled (if a request is declined by a
+safety classifier, the API retries it on Anthropic's recommended fallback model). They need
+`ANTHROPIC_API_KEY`; without it the buttons are disabled and everything else works.
 
-### Installation
+- **AI insights** – one request returns a short commentary for every tab plus the top three actions.
+- **Executive report** – a one-page Markdown report for leadership, downloadable as `.md`.
+- **Lead scoring with Claude** – re-scores each open lead from its stage, recency, budget and last
+  message, with a reason and a next action for the agent.
+- **Ask AI** – questions about the current reporting period, answered from the dashboard data.
 
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd joseph-mews-dashboard
-```
+## Google Sheets format
 
-2. **Install dependencies**
+Share the spreadsheet with the service account email. Only `Metrics` is required.
+
+**Metrics** – totals used for "All time"
+
+| Stage | Count |
+|-------|-------|
+| Total Leads | 150 |
+| Qualified Leads | 45 |
+| Viewings Scheduled | 30 |
+| Viewings Completed | 25 |
+| Offers Made | 15 |
+| Offers Accepted | 10 |
+| Closed Sales | 8 |
+
+**Daily** – enables date filtering and trends. `Source` and `Daily Budget` are optional; with `Source`
+add one row per date and source.
+
+| Date | Source | Total Leads | Qualified Leads | Viewings Scheduled | Viewings Completed | Offers Made | Offers Accepted | Closed Sales | Daily Budget |
+|------|--------|-------------|-----------------|--------------------|--------------------|-------------|-----------------|--------------|--------------|
+| 2026-10-11 | Google Ads | 9 | 3 | 2 | 2 | 1 | 0 | 0 | 220 |
+| 2026-10-12 | Google Ads | 7 | 3 | 2 | 1 | 1 | 1 | 0 | 215 |
+
+**WhatsApp** – optional
+
+| Date | Messages Answered | Relevant | Irrelevant | Positive | Negative | Scheduled Leads |
+|------|-------------------|----------|------------|----------|----------|-----------------|
+| 2026-10-12 | 28 | 20 | 8 | 12 | 8 | 5 |
+
+**Leads** – optional, enables per-lead scoring. Use pseudonymous IDs only (no names, emails or phone
+numbers). Stage is one of: New, Contacted, Qualified, Viewing Scheduled, Viewing Completed, Offer Made,
+Offer Accepted, Closed, Lost.
+
+| Lead ID | Date | Source | Stage | Budget | Last Contact | Last Message |
+|---------|------|--------|-------|--------|--------------|--------------|
+| JM-1041 | 2026-10-02 | Google Ads | Viewing Completed | £2M–£3.5M | 2026-10-11 | Could we see it again on Saturday? |
+
+## Configuration
+
+| Variable | Purpose |
+|----------|---------|
+| `GOOGLE_SHEETS_URL` | Spreadsheet URL. If unset, the dashboard shows demo data |
+| `GCP_SERVICE_ACCOUNT` | Service account JSON (or the split `GCP_SERVICE_ACCOUNT_*` variables, see `RENDER_SETUP.md`) |
+| `ANTHROPIC_API_KEY` | Enables the Claude features |
+| `CLAUDE_MODEL` | Optional model override (default `claude-opus-5-5`) |
+| `DEMO_MODE` | `true` forces demo data even when a sheet is configured |
+| `BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_INDUSTRY`, `BRAND_PRIMARY_COLOR`, `BRAND_SECONDARY_COLOR`, `BRAND_ACCENT_COLOR`, `BRAND_LOGO_URL`, `BRAND_CURRENCY`, `BRAND_LEAD_ID_PREFIX` | White-label overrides |
+
+For a client demo, either copy `brand.example.json` to `brand.json` and edit it, or set the `BRAND_*`
+variables. Add `?demo=1` to the URL to show demo data on a live deployment.
+
+## Running locally
+
 ```bash
 pip install -r requirements.txt
+streamlit run streamlit_app_simple.py
 ```
 
-3. **Set up Google Cloud credentials**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select existing one
-   - Enable Google Sheets API and Google Drive API
-   - Create a Service Account
-   - Download the JSON key file
-
-4. **Configure Streamlit secrets**
-   - Create `.streamlit` folder in the project root
-   - Create `secrets.toml` file inside `.streamlit` folder
-   - Copy content from `secrets.toml.example`
-   - Fill in your Google Service Account credentials
-
-```bash
-mkdir -p .streamlit
-cp secrets.toml.example .streamlit/secrets.toml
-# Edit .streamlit/secrets.toml with your credentials
-```
-
-5. **Run the application**
-```bash
-streamlit run streamlit_app_v2.py
-```
-
-The dashboard will open in your browser at `http://localhost:8501`
-
-## Google Sheets Setup
-
-### Required Sheet Structure
-
-Your Google Sheets document must have a worksheet named "Lead Tracker" with these columns:
-
-- **Lead ID**: Unique identifier
-- **First Name**: Lead's first name
-- **Last Name**: Lead's last name
-- **Email**: Contact email
-- **Phone**: Contact phone number
-- **Lead Source**: Where the lead came from
-- **Campaign Name**: Associated campaign
-- **Current Stage**: Current position in sales funnel
-  - Lead Collected
-  - Contact Attempted
-  - Contact Made
-  - Qualified Lead
-  - Discovery/Presentation
-  - Opportunity
-  - Negotiation
-  - Contract Signed
-  - Lost
-- **Agent Assigned**: Sales agent handling the lead
-- **Budget Range**: Lead's budget information
-- **Date Collected**: When lead was acquired
-- **Last Contact Date**: Last interaction date
-- **Next Follow-up**: Scheduled follow-up date
-- **Notes**: Additional notes and comments
-
-### Sharing Permissions
-
-1. Open your Google Sheet
-2. Click "Share" button
-3. Add your Service Account email (from secrets.toml)
-4. Grant "Editor" permissions
-
-## Usage
-
-1. **Launch the dashboard**
-   ```bash
-   streamlit run streamlit_app_v2.py
-   ```
-
-2. **Enter Google Sheets URL**
-   - Copy your Google Sheets URL from browser
-   - Paste it in the sidebar
-   - Dashboard will load automatically
-
-3. **Select Dashboard View**
-   - **Admin Dashboard**: Full analytics and team overview
-   - **Client Dashboard**: Campaign performance for stakeholders
-   - **Agent Dashboard**: Personal lead management for agents
-
-4. **Refresh Data**
-   - Click "🔄 Refresh Data" button in sidebar
-   - Dashboard auto-refreshes every 5 minutes
-
-## Deployment
-
-### Streamlit Community Cloud
-
-1. Push your code to GitHub
-2. Go to [Streamlit Community Cloud](https://streamlit.io/cloud)
-3. Connect your GitHub repository
-4. Add secrets in the dashboard settings
-5. Deploy!
-
-### Environment Variables
-
-For production deployment, ensure these secrets are configured:
-- `gcp_service_account` - Full Google Service Account credentials
-
-## Troubleshooting
-
-### Common Issues
-
-**"Error connecting to Google Sheets"**
-- Verify Service Account credentials in secrets.toml
-- Check if APIs are enabled in Google Cloud Console
-- Ensure Service Account has access to the spreadsheet
-
-**"No data found"**
-- Confirm worksheet is named "Lead Tracker"
-- Check Google Sheets URL is correct
-- Verify spreadsheet has data
-
-**"No agents found"**
-- Ensure "Agent Assigned" column has values
-- Check for "Unassigned" entries (these are filtered out)
-
-## Tech Stack
-
-- **Streamlit**: Web application framework
-- **Pandas**: Data manipulation
-- **Plotly**: Interactive visualizations
-- **gspread**: Google Sheets integration
-- **Google Auth**: Authentication handling
-
-## File Structure
+## Project structure
 
 ```
-joseph-mews-dashboard/
-├── streamlit_app_v2.py      # Main application (recommended)
-├── streamlit_app.py          # Alternative version
-├── requirements.txt          # Python dependencies
-├── runtime.txt              # Python version
-├── secrets.toml.example     # Secrets template
-├── .streamlit/
-│   └── secrets.toml         # Your credentials (not in git)
-└── README.md                # This file
+streamlit_app_simple.py   # entry point and tab layout (Render runs this file)
+dashboard/
+  config.py               # white-label brand settings
+  data.py                 # Google Sheets, demo data, funnel and scoring calculations
+  ai.py                   # Claude features
+  ui.py                   # styling and rendering helpers
+brand.example.json        # sample brand configuration
+render.yaml, Dockerfile   # deployment
 ```
-
-## Development
-
-### Local Development
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run with auto-reload
-streamlit run streamlit_app_v2.py --server.runOnSave true
-```
-
-### Features Roadmap
-
-- [ ] Export reports to PDF
-- [ ] Email notifications for follow-ups
-- [ ] Advanced filtering and search
-- [ ] Custom date range selection
-- [ ] Lead scoring system
-- [ ] Integration with CRM systems
-
-## Support
-
-For issues or questions:
-1. Check the Troubleshooting section
-2. Review Google Sheets setup requirements
-3. Verify all dependencies are installed
 
 ## License
 
-© 2024 Joseph Mews Dashboard. All rights reserved.
+© 2026 Joseph Mews Dashboard. All rights reserved.

@@ -1,0 +1,16 @@
+{
+  "name": "Joseph Mews",
+  "tagline": "Lead Funnel Dashboard",
+  "industry": "luxury real estate",
+  "primary_color": "#667eea",
+  "secondary_color": "#764ba2",
+  "accent_color": "#F4B23E",
+  "logo_url": "",
+  "currency": "£",
+  "lead_id_prefix": "JM",
+  "targets": {
+    "Qualification Rate": 30,
+    "Viewing → Offer": 40,
+    "Close Rate": 2.5
+  }
+}

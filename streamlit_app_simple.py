@@ -1,1361 +1,667 @@
-import streamlit as st
-import pandas as pd
-import os
+"""Lead funnel dashboard - entry point (Render runs this file)."""
+import hashlib
 import json
-from datetime import datetime
-import time
+import os
+from datetime import date, datetime, timedelta
+
+import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
+import streamlit as st
 
-try:
-    import gspread
-    from google.oauth2.service_account import Credentials
-    GOOGLE_SHEETS_AVAILABLE = True
-except ImportError:
-    GOOGLE_SHEETS_AVAILABLE = False
+from dashboard import ai, data, ui
+from dashboard.config import load_brand
 
-# Page config
+brand = load_brand()
+
 st.set_page_config(
-    page_title="Joseph Mews Lead Funnel Dashboard",
+    page_title=f"{brand.name} · {brand.tagline}",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-# Custom CSS - Enhanced design
-st.markdown("""
-<style>
-    /* Hide sidebar completely */
-    [data-testid="stSidebar"] {
-        display: none;
-    }
+PERIODS = {"Last 7 days": 7, "Last 30 days": 30, "Last 90 days": 90}
+CHAT_SUGGESTIONS = [
+    "Which lead source brings the best quality leads?",
+    "Where are we losing the most leads, and what should we do?",
+    "How did this period compare with the previous one?",
+    "Which hot leads should the team call first today?",
+]
+AI_DISABLED_HELP = "Set ANTHROPIC_API_KEY to enable Claude features."
 
-    /* Logo styling */
-    .logo-container {
-        text-align: center;
-        padding: 2rem 0 1rem 0;
-        margin-bottom: 1rem;
-    }
 
-    .logo-text {
-        font-size: 4.5rem;
-        font-weight: bold;
-        color: #F4B23E;
-        text-shadow: 2px 2px 4px rgba(244, 178, 62, 0.3);
-        letter-spacing: 2px;
-        font-family: 'Georgia', serif;
-        margin: 0;
-        line-height: 1;
-    }
+# --------------------------------------------------------------------------- #
+# Data
+# --------------------------------------------------------------------------- #
 
-    /* Main header */
-    .main-header {
-        font-size: 2rem;
-        font-weight: 600;
-        text-align: center;
-        margin-bottom: 0.5rem;
-        color: #333;
-    }
-
-    .subtitle {
-        text-align: center;
-        color: #666;
-        font-size: 1.1rem;
-        margin-bottom: 2rem;
-    }
-
-    /* Metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        margin-bottom: 1.5rem;
-        text-align: center;
-        transition: transform 0.2s;
-    }
-
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-    }
-
-    .metric-label {
-        font-size: 1rem;
-        color: rgba(255,255,255,0.9);
-        margin-bottom: 0.8rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .metric-value {
-        font-size: 3.5rem;
-        font-weight: bold;
-        color: white;
-        line-height: 1;
-    }
-
-    /* Flow chart styling */
-    .flow-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 2rem 0;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .flow-metric {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        text-align: center;
-        min-width: 140px;
-    }
-
-    .flow-metric-label {
-        font-size: 0.9rem;
-        color: rgba(255,255,255,0.95);
-        margin-bottom: 0.5rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .flow-metric-value {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: white;
-    }
-
-    .flow-arrow {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.3rem;
-        color: #667eea;
-        font-weight: 600;
-    }
-
-    .flow-arrow-icon {
-        font-size: 2rem;
-    }
-
-    .flow-arrow-rate {
-        font-size: 1.2rem;
-        font-weight: bold;
-    }
-
-    /* Last updated */
-    .last-update {
-        text-align: center;
-        color: #888;
-        font-size: 0.9rem;
-        margin-top: 2rem;
-        padding: 1rem;
-        background: #f8f9fa;
-        border-radius: 8px;
-    }
-
-    /* Footer */
-    .footer {
-        text-align: center;
-        color: #999;
-        font-size: 0.8rem;
-        margin-top: 3rem;
-        padding: 1rem;
-        border-top: 1px solid #eee;
-    }
-
-    /* Loading animation */
-    .stSpinner > div {
-        border-top-color: #667eea !important;
-    }
-
-    /* Progress bars styling */
-    .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
-
-    /* Download button */
-    .download-section {
-        text-align: center;
-        margin: 2rem 0;
-    }
-
-    .download-btn {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 0.8rem 2rem;
-        border-radius: 8px;
-        text-decoration: none;
-        display: inline-block;
-        font-weight: 600;
-        transition: transform 0.2s;
-        border: none;
-        cursor: pointer;
-    }
-
-    .download-btn:hover {
-        transform: scale(1.05);
-    }
-
-    /* Metric comparison */
-    .comparison-box {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        border-left: 3px solid #667eea;
-    }
-
-    /* Animation for metrics */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .metric-card {
-        animation: fadeIn 0.5s ease-out;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-@st.cache_resource
-def get_google_sheets_client():
-    """Initialize Google Sheets client with credentials"""
-    if not GOOGLE_SHEETS_AVAILABLE:
-        return None
-
-    credentials_dict = None
-
-    try:
-        # Try environment variables first
-        if os.getenv("GCP_SERVICE_ACCOUNT"):
-            credentials_dict = json.loads(os.getenv("GCP_SERVICE_ACCOUNT"))
-        elif os.getenv("GCP_SERVICE_ACCOUNT_PROJECT_ID"):
-            credentials_dict = {
-                "type": os.getenv("GCP_SERVICE_ACCOUNT_TYPE", "service_account"),
-                "project_id": os.getenv("GCP_SERVICE_ACCOUNT_PROJECT_ID"),
-                "private_key_id": os.getenv("GCP_SERVICE_ACCOUNT_PRIVATE_KEY_ID"),
-                "private_key": os.getenv("GCP_SERVICE_ACCOUNT_PRIVATE_KEY", "").replace("\\n", "\n"),
-                "client_email": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_EMAIL"),
-                "client_id": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_ID"),
-                "auth_uri": os.getenv("GCP_SERVICE_ACCOUNT_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
-                "token_uri": os.getenv("GCP_SERVICE_ACCOUNT_TOKEN_URI", "https://oauth2.googleapis.com/token"),
-                "auth_provider_x509_cert_url": os.getenv("GCP_SERVICE_ACCOUNT_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
-                "client_x509_cert_url": os.getenv("GCP_SERVICE_ACCOUNT_CLIENT_X509_CERT_URL")
-            }
-        else:
-            try:
-                if "gcp_service_account" in st.secrets:
-                    credentials_dict = st.secrets["gcp_service_account"]
-            except:
-                pass
-
-        if not credentials_dict:
-            return None
-
-        credentials = Credentials.from_service_account_info(
-            credentials_dict,
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"
-            ]
-        )
-        client = gspread.authorize(credentials)
-        return client
-    except Exception as e:
-        st.error(f"Error connecting to Google Sheets: {e}")
-        return None
-
-@st.cache_data(ttl=30)  # Refresh every 30 seconds
-def load_metrics_from_sheets(_client, spreadsheet_url):
-    """Load metrics from Google Sheets - NO PERSONAL DATA"""
-    try:
-        sheet = _client.open_by_url(spreadsheet_url)
-
-        # Load current metrics
-        worksheet = sheet.worksheet("Metrics")
-        data = worksheet.get_all_records()
-        df = pd.DataFrame(data)
-
-        # Try to load daily data for trends
-        daily_df = None
+def load_bundle(today):
+    url = os.getenv("GOOGLE_SHEETS_URL")
+    force_demo = (os.getenv("DEMO_MODE", "").lower() in ("1", "true", "yes")
+                  or st.query_params.get("demo") in ("1", "true"))
+    if url and not force_demo:
         try:
-            daily_worksheet = sheet.worksheet("Daily")
-            daily_data = daily_worksheet.get_all_records()
-            daily_df = pd.DataFrame(daily_data)
+            return data.load_from_sheets(url), None
+        except Exception as e:  # any connection/format problem: explain it and keep the demo usable
+            note = f"Could not load Google Sheets ({e}). Showing demo data instead."
+            return data.build_demo_data(today, brand.lead_id_prefix), note
+    note = None if force_demo else (
+        "Google Sheets is not connected (GOOGLE_SHEETS_URL is not set), so the dashboard is showing demo data.")
+    return data.build_demo_data(today, brand.lead_id_prefix), note
 
-            # Convert Date column to datetime
-            if 'Date' in daily_df.columns:
-                daily_df['Date'] = pd.to_datetime(daily_df['Date'], errors='coerce')
-                daily_df = daily_df.dropna(subset=['Date'])
-                daily_df = daily_df.sort_values('Date')
 
-            # Convert numeric columns to numeric type
-            numeric_columns = ['Total Leads', 'Qualified Leads', 'Viewings Scheduled',
-                             'Viewings Completed', 'Offers Made', 'Offers Accepted',
-                             'Closed Sales', 'Daily Budget']
-            for col in numeric_columns:
-                if col in daily_df.columns:
-                    daily_df[col] = pd.to_numeric(daily_df[col], errors='coerce').fillna(0)
-        except:
-            # Daily sheet doesn't exist yet
-            pass
+def in_range(df, date_range):
+    if df is None or date_range is None or "Date" not in df.columns:
+        return df
+    start, end = date_range
+    return df[(df["Date"].dt.date >= start) & (df["Date"].dt.date <= end)]
 
-        # Try to load WhatsApp metrics
-        whatsapp_df = None
-        try:
-            whatsapp_worksheet = sheet.worksheet("WhatsApp")
-            whatsapp_data = whatsapp_worksheet.get_all_records()
-            whatsapp_df = pd.DataFrame(whatsapp_data)
 
-            # Convert Date column to datetime
-            if 'Date' in whatsapp_df.columns:
-                whatsapp_df['Date'] = pd.to_datetime(whatsapp_df['Date'], errors='coerce')
-                whatsapp_df = whatsapp_df.dropna(subset=['Date'])
-                whatsapp_df = whatsapp_df.sort_values('Date')
+def choose_period(bundle, select_col, custom_col):
+    daily = bundle.daily
+    if not data.has_funnel_columns(daily):
+        select_col.selectbox("Reporting period", ["All time"], disabled=True,
+                             help="Add a 'Daily' worksheet to filter by date.")
+        return None, "All time"
 
-            # Convert numeric columns to numeric type
-            numeric_columns = ['Messages Answered', 'Positive', 'Negative',
-                             'Relevant', 'Irrelevant', 'Scheduled Leads']
-            for col in numeric_columns:
-                if col in whatsapp_df.columns:
-                    whatsapp_df[col] = pd.to_numeric(whatsapp_df[col], errors='coerce').fillna(0)
-        except:
-            # WhatsApp sheet doesn't exist yet
-            pass
+    first, last = daily["Date"].min().date(), daily["Date"].max().date()
+    options = ["All time", *PERIODS, "Custom range"]
+    default = options.index("Last 30 days") if bundle.source == "demo" else 0
+    choice = select_col.selectbox("Reporting period", options, index=default,
+                                  help="Periods end on the latest date in the data.")
 
-        return df, daily_df, whatsapp_df, datetime.now()
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame(), None, None, None
+    if choice == "All time":
+        return None, f"{first:%d %b %Y} – {last:%d %b %Y}"
+    if choice == "Custom range":
+        picked = custom_col.date_input("Dates", value=(max(first, last - timedelta(days=29)), last),
+                                       min_value=first, max_value=last, format="DD/MM/YYYY")
+        start, end = (picked if len(picked) == 2 else (picked[0], picked[0]))
+    else:
+        start, end = max(first, last - timedelta(days=PERIODS[choice] - 1)), last
+    return (start, end), f"{start:%d %b} – {end:%d %b %Y}"
 
-def calculate_metrics(df):
-    """Calculate sales funnel metrics"""
-    if df.empty or 'Stage' not in df.columns or 'Count' not in df.columns:
-        return {
-            'Total Leads': 0,
-            'Qualified Leads': 0,
-            'Viewings Scheduled': 0,
-            'Viewings Completed': 0,
-            'Offers Made': 0,
-            'Offers Accepted': 0,
-            'Closed Sales': 0
+
+def previous_period(daily, date_range):
+    if date_range is None or not data.has_funnel_columns(daily):
+        return None
+    start, end = date_range
+    length = (end - start).days + 1
+    prev_start, prev_end = start - timedelta(days=length), start - timedelta(days=1)
+    if daily["Date"].min().date() > prev_start:
+        return None
+    return data.metrics_from_daily(in_range(daily, (prev_start, prev_end)))
+
+
+def change_note(current, previous):
+    if not previous:
+        return ""
+    change = (current - previous) / previous * 100
+    return f"{'▲' if change >= 0 else '▼'} {abs(change):.0f}% vs previous period"
+
+
+def fingerprint(obj):
+    return hashlib.md5(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def apply_ai_scores(scored):
+    """Overlay Claude's per-lead scores (if generated for these exact leads) on the rule-based scores."""
+    scored["Scored by"] = "Rules"
+    cached = st.session_state.get("lead_ai")
+    if not cached or cached["key"] != lead_fingerprint(scored):
+        return scored, False
+    results = cached["data"]
+    scored["Reason"], scored["Next Action"] = "", ""
+    for i, lead_id in scored["Lead ID"].items():
+        result = results.get(str(lead_id))
+        if result:
+            scored.at[i, "Score"] = result["score"]
+            scored.at[i, "Temperature"] = result["temperature"]
+            scored.at[i, "Reason"] = result["reason"]
+            scored.at[i, "Next Action"] = result["next_action"]
+            scored.at[i, "Scored by"] = "Claude"
+    return scored, True
+
+
+def lead_records(scored, limit=80):
+    cols = {"Lead ID": "lead_id", "Stage": "stage", "Source": "source", "Budget": "budget",
+            "Days Since Contact": "days_since_contact", "Last Message": "last_message", "Date": "created"}
+    present = [c for c in cols if c in scored.columns]
+    records = scored.head(limit)[present].rename(columns=cols)
+    if "created" in records.columns:
+        records["created"] = records["created"].dt.strftime("%Y-%m-%d")
+    return records.to_dict("records")
+
+
+def lead_fingerprint(scored):
+    return fingerprint(lead_records(scored))
+
+
+def build_ai_context(bundle, period_label, metrics, steps, temp, whatsapp, sources, totals, scored, today):
+    ctx = {
+        "business": brand.name,
+        "industry": brand.industry,
+        "currency": brand.currency,
+        "today": today.isoformat(),
+        "reporting_period": period_label,
+        "data_source": "demo data" if bundle.source == "demo" else "live Google Sheets",
+        "funnel_counts": metrics,
+        "conversion_steps": [{"step": s["stage"], "rate_pct": round(s["rate"], 1), "lost": s["drop_off"]}
+                             for s in steps],
+        "overall_close_rate_pct": round(data.pct(metrics["Closed Sales"], metrics["Total Leads"]), 2),
+        "lead_temperature": temp,
+        "targets_pct": brand.targets,
+    }
+    if whatsapp:
+        ctx["whatsapp_totals"] = whatsapp
+    if sources is not None:
+        ctx["lead_sources"] = sources.round(2).to_dict("records")
+    if totals is not None and not totals.empty:
+        weekly = totals.set_index("Date").resample("W-SUN").sum(numeric_only=True).reset_index()
+        weekly["Date"] = weekly["Date"].dt.strftime("week ending %Y-%m-%d")
+        ctx["weekly_totals"] = weekly.to_dict("records")
+    if scored is not None:
+        hottest = scored.sort_values("Score", ascending=False).head(10)
+        ctx["open_leads"] = {
+            "scoring_method": temp["method"],
+            "by_temperature": scored["Temperature"].value_counts().to_dict(),
+            "by_stage": scored["Stage"].value_counts().to_dict(),
+            "hottest": [{**record, "temperature": t, "score": int(s)} for record, t, s in zip(
+                lead_records(hottest, limit=10), hottest["Temperature"], hottest["Score"])],
         }
+    return ctx
 
-    metrics = {}
-    for _, row in df.iterrows():
-        stage = row['Stage']
-        count = row['Count']
-        metrics[stage] = int(count)
 
-    return metrics
+# --------------------------------------------------------------------------- #
+# Sections
+# --------------------------------------------------------------------------- #
 
-def calculate_bottleneck(metrics):
-    """Identify the biggest bottleneck in the funnel"""
-    conversion_stages = [
-        ('Lead → Qualified', metrics.get('Total Leads', 0), metrics.get('Qualified Leads', 0)),
-        ('Qualified → Viewing', metrics.get('Qualified Leads', 0), metrics.get('Viewings Completed', 0)),
-        ('Viewing → Offer', metrics.get('Viewings Completed', 0), metrics.get('Offers Made', 0)),
-        ('Offer → Accepted', metrics.get('Offers Made', 0), metrics.get('Offers Accepted', 0)),
-        ('Accepted → Closed', metrics.get('Offers Accepted', 0), metrics.get('Closed Sales', 0)),
-    ]
+def section_insight(name):
+    cached = st.session_state.get("insights")
+    if cached and cached["key"] == st.session_state.get("context_key"):
+        ui.insight(cached["data"].get(name))
 
-    bottlenecks = []
-    for stage_name, from_count, to_count in conversion_stages:
-        if from_count > 0:
-            conversion_rate = (to_count / from_count) * 100
-            drop_off = from_count - to_count
-            bottlenecks.append({
-                'stage': stage_name,
-                'rate': conversion_rate,
-                'drop_off': drop_off,
-                'from': from_count,
-                'to': to_count
-            })
 
-    # Sort by conversion rate (lowest = biggest bottleneck)
-    bottlenecks.sort(key=lambda x: x['rate'])
-    return bottlenecks
+def render_overview(metrics, prev, totals, temp, spend, context, today):
+    total, qualified = metrics["Total Leads"], metrics["Qualified Leads"]
+    closed, viewings = metrics["Closed Sales"], metrics["Viewings Completed"]
+    prev = prev or {}
 
-def calculate_projections(metrics):
-    """Calculate projected outcomes based on current conversion rates"""
-    total = metrics.get('Total Leads', 0)
-    if total == 0:
-        return {}
+    cols = st.columns(6)
+    with cols[0]:
+        avg = f"{total / len(totals):.1f}/day · " if totals is not None and len(totals) else ""
+        ui.kpi("Leads", f"{total:,}", avg + change_note(total, prev.get("Total Leads")))
+    with cols[1]:
+        ui.kpi("Qualified", f"{data.pct(qualified, total):.1f}%", f"{qualified:,} leads")
+    with cols[2]:
+        ui.kpi("Viewings", f"{viewings:,}", f"{data.pct(viewings, qualified):.0f}% of qualified")
+    with cols[3]:
+        ui.kpi("Closed sales", f"{closed:,}", change_note(closed, prev.get("Closed Sales"))
+               or f"{data.pct(closed, total):.1f}% close rate")
+    with cols[4]:
+        ui.kpi("Close rate", f"{data.pct(closed, total):.2f}%", f"target {brand.targets.get('Close Rate', 0)}%")
+    with cols[5]:
+        if spend:
+            ui.kpi("Cost per lead", f"{brand.currency}{spend / total:,.0f}" if total else "–",
+                   f"{brand.currency}{spend / closed:,.0f} per sale" if closed else "")
+        else:
+            ui.kpi("Lead quality", f"{temp['quality_score']:.2f} / 3", "weighted Hot/Warm/Cold")
 
-    # Current rates
-    qual_rate = metrics.get('Qualified Leads', 0) / total
-    viewing_rate = metrics.get('Viewings Completed', 0) / total
-    offer_rate = metrics.get('Offers Made', 0) / total
-    close_rate = metrics.get('Closed Sales', 0) / total
+    st.markdown("#### Funnel at a glance")
+    ui.flow([
+        ("Leads", total, data.pct(qualified, total)),
+        ("Qualified", qualified, data.pct(metrics["Viewings Scheduled"], qualified)),
+        ("Viewings booked", metrics["Viewings Scheduled"], data.pct(viewings, metrics["Viewings Scheduled"])),
+        ("Viewings done", viewings, data.pct(metrics["Offers Made"], viewings)),
+        ("Offers", metrics["Offers Made"], data.pct(metrics["Offers Accepted"], metrics["Offers Made"])),
+        ("Accepted", metrics["Offers Accepted"], data.pct(closed, metrics["Offers Accepted"])),
+        ("Closed", closed, None),
+    ], final=("Close rate", f"{data.pct(closed, total):.1f}%"))
+    section_insight("overview")
 
-    # Projections for next 100 leads
-    projection_input = 100
+    left, right = st.columns([3, 2])
+    with left:
+        render_report(context, today)
+    with right:
+        st.markdown("#### Priority actions")
+        cached = st.session_state.get("insights")
+        if cached and cached["key"] == st.session_state.get("context_key"):
+            for i, action in enumerate(cached["data"].get("actions", [])[:3], 1):
+                st.markdown(f"**{i}.** {action}")
+        else:
+            st.caption("Generate AI insights (top right) to get this week's three highest-impact actions.")
 
-    projections = {
-        'input_leads': projection_input,
-        'projected_qualified': int(projection_input * qual_rate),
-        'projected_viewings': int(projection_input * viewing_rate),
-        'projected_offers': int(projection_input * offer_rate),
-        'projected_closed': int(projection_input * close_rate),
-        'current_close_rate': close_rate * 100
-    }
 
-    # What if scenarios
-    projections['if_qual_improves_10'] = int(projection_input * min(qual_rate * 1.1, 1.0) * close_rate / qual_rate) if qual_rate > 0 else 0
-    projections['if_viewing_improves_10'] = int(projection_input * close_rate / viewing_rate * min(viewing_rate * 1.1, 1.0)) if viewing_rate > 0 else 0
+def render_report(context, today):
+    st.markdown("#### Executive report")
+    st.caption("A one-page summary for leadership, written by Claude from the figures on this dashboard.")
+    cached = st.session_state.get("report")
+    if st.button("Write report", disabled=not ai.is_configured(),
+                 help=None if ai.is_configured() else AI_DISABLED_HELP):
+        with st.container(border=True):
+            try:
+                text = st.write_stream(ai.stream_report(brand, context, today))
+                cached = {"key": st.session_state.context_key, "text": text, "date": today}
+                st.session_state.report = cached
+            except ai.AIError as e:
+                st.error(str(e))
+                return
+    elif cached:
+        if cached["key"] != st.session_state.context_key:
+            st.caption("The report below was written for different filters. Write it again to refresh it.")
+        with st.expander("Latest report", expanded=False):
+            st.markdown(cached["text"])
+    if cached:
+        slug = "".join(ch if ch.isalnum() else "-" for ch in brand.name.lower()).strip("-")
+        st.download_button("Download report (.md)", cached["text"],
+                           file_name=f"{slug}-lead-report-{cached['date']:%Y-%m-%d}.md", mime="text/markdown")
 
-    return projections
+
+def render_funnel_and_scoring(metrics, steps, temp, scored, ai_scored, today):
+    st.markdown("### Funnel")
+    section_insight("funnel")
+    left, right = st.columns([3, 2])
+    with left:
+        fig = go.Figure(go.Funnel(
+            y=data.FUNNEL_STAGES, x=[metrics[s] for s in data.FUNNEL_STAGES],
+            textinfo="value+percent initial",
+            marker={"color": [brand.primary_color, brand.secondary_color, "#9f7aea", "#4facfe",
+                              "#00b8d9", "#38b2ac", ui.GOOD]},
+            connector={"line": {"color": "rgba(128,128,128,.4)", "dash": "dot"}},
+        ))
+        ui.chart(fig, "funnel", height=360, legend=False)
+    with right:
+        colors = [ui.BAD if s["rate"] < 30 else ui.WARM if s["rate"] < 70 else ui.GOOD for s in steps]
+        fig = go.Figure(go.Bar(
+            x=[s["rate"] for s in steps], y=[s["stage"] for s in steps], orientation="h",
+            marker_color=colors, text=[f"{s['rate']:.0f}%" for s in steps], textposition="outside",
+            hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
+        ))
+        fig.update_layout(title="Step conversion (red < 30% · amber 30–70% · green > 70%)",
+                          xaxis=dict(range=[0, 110], title=None), yaxis=dict(autorange="reversed"))
+        ui.chart(fig, "step_rates", height=360, legend=False)
+
+    worst = data.bottlenecks(metrics)
+    if worst:
+        w = worst[0]
+        st.markdown("#### Biggest bottleneck")
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            ui.kpi(w["stage"], f"{w['rate']:.1f}%", f"{w['drop_off']:,} of {w['from']:,} leads lost at this step")
+        with c2:
+            st.markdown("\n".join(f"- {tip}" for tip in data.STAGE_PLAYBOOK[w["stage"]]))
+
+    st.divider()
+    st.markdown("### Lead scoring")
+    with st.expander("How is lead scoring calculated?"):
+        st.markdown("""
+- **Hot** – ready to transact soon: viewing done and in the offer stage, or a strong buying signal in their last message.
+- **Warm** – qualified and engaged (viewings booked or done) but still needs nurturing.
+- **Cold** – early stage or gone quiet: new, not yet qualified, or no contact for weeks.
+
+**With a `Leads` worksheet** every open lead gets a 0–100 score: a base score for its stage
+(New 10 → Offer Accepted 95), +10 if contacted in the last 3 days, −10 after 10 days and −20 after
+21 days of silence. Hot ≥ 70, Warm 40–69, Cold < 40. **Score with Claude** re-scores each lead by also
+reading the lead's last message, and explains every score.
+
+**Without a `Leads` worksheet** the split is estimated from the funnel counts.
+The **quality score** is (Hot × 3 + Warm × 2 + Cold × 1) ÷ leads, from 1.0 (all cold) to 3.0 (all hot).
+""")
+    section_insight("scoring")
+
+    total = temp["hot"] + temp["warm"] + temp["cold"]
+    cols = st.columns(4)
+    cards = [("Hot", temp["hot"], ui.HOT), ("Warm", temp["warm"], ui.WARM), ("Cold", temp["cold"], ui.COLD)]
+    for col, (label, count, color) in zip(cols, cards):
+        with col:
+            ui.temperature_card(f"{label} leads", f"{count:,}", f"{data.pct(count, total):.0f}% of {temp['basis']}",
+                                temp["notes"][label], color)
+    with cols[3]:
+        q = temp["quality_score"]
+        ui.temperature_card("Quality score", f"{q:.2f}", "out of 3.00",
+                            "Excellent" if q >= 2.0 else "Good" if q >= 1.5 else "Needs work",
+                            ui.GOOD if q >= 2.0 else ui.WARM if q >= 1.5 else ui.BAD)
+
+    if scored is None:
+        st.info("Add a **Leads** worksheet (Lead ID, Date, Source, Stage, Budget, Last Contact, Last Message) "
+                "to score every open lead individually and let Claude prioritise them. Use pseudonymous IDs only.")
+        return
+
+    st.markdown("#### Open leads")
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        st.caption(f"{len(scored)} open leads across all dates · "
+                   + ("scored by Claude from stage, recency, budget and the lead's last message" if ai_scored
+                      else "rule-based scores · use Claude for message-aware scoring"))
+    with c2:
+        if st.button("Score leads with Claude", disabled=not ai.is_configured(),
+                     help=None if ai.is_configured() else AI_DISABLED_HELP, width="stretch"):
+            with st.spinner("Claude is reading every lead…"):
+                try:
+                    st.session_state.lead_ai = {"key": lead_fingerprint(scored),
+                                                "data": ai.score_leads(brand, lead_records(scored), today)}
+                    st.rerun()
+                except ai.AIError as e:
+                    st.error(str(e))
+
+    show = st.segmented_control("Show", ["Hot", "Warm", "Cold"], selection_mode="multi",
+                                default=["Hot", "Warm", "Cold"], key="temp_filter")
+    view = scored[scored["Temperature"].isin(show or [])].sort_values("Score", ascending=False)
+    columns = ["Lead ID", "Temperature", "Score", "Stage", "Source", "Budget", "Days Since Contact", "Last Message"]
+    if ai_scored:
+        columns += ["Reason", "Next Action"]
+    st.dataframe(
+        view[[c for c in columns if c in view.columns]],
+        hide_index=True, width="stretch", height=min(420, 38 + 35 * len(view)),
+        column_config={
+            "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%d"),
+            "Days Since Contact": st.column_config.NumberColumn("Days quiet", format="%d"),
+            "Last Message": st.column_config.TextColumn(width="large"),
+            "Reason": st.column_config.TextColumn(width="large"),
+            "Next Action": st.column_config.TextColumn(width="medium"),
+        },
+    )
+
+
+def render_channels(whatsapp_df, whatsapp, sources):
+    section_insight("channels")
+    if not whatsapp and sources is None:
+        st.info("Add a **WhatsApp** worksheet and a **Source** column in the Daily worksheet to see channel performance.")
+        return
+
+    if whatsapp:
+        st.markdown("### WhatsApp")
+        answered, relevant = whatsapp["Messages Answered"], whatsapp["Relevant"]
+        positive, scheduled = whatsapp["Positive"], whatsapp["Scheduled Leads"]
+        ui.flow([
+            ("Answered", answered, data.pct(relevant, answered)),
+            ("Relevant", relevant, data.pct(positive, relevant)),
+            ("Positive", positive, data.pct(scheduled, positive)),
+            ("Scheduled", scheduled, None),
+        ], final=("Conversion", f"{data.pct(scheduled, answered):.1f}%"))
+
+        left, right = st.columns(2)
+        with left:
+            fig = go.Figure()
+            fig.add_bar(x=whatsapp_df["Date"], y=whatsapp_df["Messages Answered"], name="Answered",
+                        marker_color=ui.rgba("#25D366", .55))
+            fig.add_scatter(x=whatsapp_df["Date"], y=whatsapp_df["Scheduled Leads"], name="Scheduled",
+                            mode="lines+markers", line=dict(color="#128C7E", width=2.5), yaxis="y2")
+            fig.update_layout(title="Messages answered vs leads scheduled",
+                              yaxis2=dict(overlaying="y", side="right", showgrid=False))
+            ui.chart(fig, "wa_daily", time_series=True)
+        with right:
+            fig = go.Figure()
+            for col, color in (("Positive", ui.GOOD), ("Negative", ui.BAD), ("Irrelevant", "#a0aec0")):
+                if col in whatsapp_df.columns:
+                    fig.add_bar(x=whatsapp_df["Date"], y=whatsapp_df[col], name=col, marker_color=color)
+            fig.update_layout(title="Conversation quality", barmode="stack")
+            ui.chart(fig, "wa_quality", time_series=True)
+
+    if sources is not None:
+        st.markdown("### Lead sources")
+        left, right = st.columns([3, 2])
+        with left:
+            st.dataframe(
+                sources, hide_index=True, width="stretch",
+                column_config={
+                    "Qualified %": st.column_config.NumberColumn(format="%.1f%%"),
+                    "Close %": st.column_config.NumberColumn(format="%.2f%%"),
+                    "Spend": st.column_config.NumberColumn(format=f"{brand.currency}%,.0f"),
+                    "Cost / Lead": st.column_config.NumberColumn(format=f"{brand.currency}%.0f"),
+                    "Quality Score": st.column_config.ProgressColumn(min_value=1, max_value=3, format="%.2f"),
+                },
+            )
+        with right:
+            fig = go.Figure(go.Bar(
+                x=sources["Source"], y=sources["Qualified %"], marker_color=brand.primary_color,
+                text=[f"{v:.0f}%" for v in sources["Qualified %"]], textposition="outside",
+            ))
+            fig.update_layout(title="Qualification rate by source", yaxis=dict(title=None))
+            ui.chart(fig, "source_quality", legend=False)
+
+
+def render_trends(totals):
+    section_insight("trends")
+    if totals is None or totals.empty:
+        st.info("Add a **Daily** worksheet (Date plus the funnel columns) to see trends over time.")
+        return
+
+    rolling = totals.set_index("Date")[["Total Leads", "Closed Sales"]].rolling(7, min_periods=1).mean()
+    left, right = st.columns(2)
+    with left:
+        fig = go.Figure()
+        fig.add_bar(x=totals["Date"], y=totals["Total Leads"], name="Leads", marker_color=ui.rgba(brand.primary_color, .35))
+        fig.add_scatter(x=rolling.index, y=rolling["Total Leads"], name="7-day average",
+                        line=dict(color=brand.primary_color, width=2.5))
+        fig.update_layout(title="Daily leads")
+        ui.chart(fig, "trend_leads", time_series=True)
+    with right:
+        fig = go.Figure()
+        fig.add_bar(x=totals["Date"], y=totals["Closed Sales"], name="Closed", marker_color=ui.rgba(ui.GOOD, .4))
+        fig.add_scatter(x=rolling.index, y=rolling["Closed Sales"], name="7-day average",
+                        line=dict(color=ui.GOOD, width=2.5))
+        fig.update_layout(title="Daily closed sales")
+        ui.chart(fig, "trend_closed", time_series=True)
+
+    left, right = st.columns(2)
+    with left:
+        temps = data.temperature_trend(totals)
+        fig = go.Figure()
+        for label, color in (("Cold", ui.COLD), ("Warm", ui.WARM), ("Hot", ui.HOT)):
+            fig.add_scatter(x=temps["Date"], y=temps[label], name=label, stackgroup="one",
+                            line=dict(width=0.5, color=color))
+        fig.update_layout(title="Lead mix over time (estimated from daily funnel counts)")
+        ui.chart(fig, "trend_temperature", time_series=True)
+    with right:
+        if totals.get("Daily Budget", pd.Series(dtype=float)).sum() > 0:
+            cpl = totals["Daily Budget"] / totals["Total Leads"].where(totals["Total Leads"] > 0)
+            fig = go.Figure()
+            fig.add_bar(x=totals["Date"], y=totals["Daily Budget"], name="Spend", marker_color=ui.rgba("#a0aec0", .5))
+            fig.add_scatter(x=totals["Date"], y=cpl.rolling(7, min_periods=1).mean(), name="Cost per lead (7-day)",
+                            line=dict(color=brand.secondary_color, width=2.5), yaxis="y2")
+            fig.update_layout(title=f"Spend and cost per lead ({brand.currency})",
+                              yaxis2=dict(overlaying="y", side="right", showgrid=False))
+            ui.chart(fig, "trend_spend", time_series=True)
+        else:
+            fig = go.Figure(go.Scatter(x=temps["Date"], y=temps["Quality Score"].rolling(7, min_periods=1).mean(),
+                                       line=dict(color=brand.primary_color, width=2.5), name="Quality"))
+            fig.update_layout(title="Lead quality score (7-day average)", yaxis=dict(range=[1, 3]))
+            ui.chart(fig, "trend_quality", legend=False, time_series=True)
+
+
+def render_forecast(metrics, steps):
+    section_insight("forecast")
+    with st.expander("How are these projections calculated?"):
+        st.markdown("""
+These are **data-driven projections, not guesses**: they apply the conversion rates measured in the
+selected reporting period to a number of future leads.
+
+- **Expected outcomes** = future leads × (stage count ÷ leads) for each stage.
+- **What-if** = raise one conversion step by 10 percentage points, keep the others unchanged, and see how
+  many extra sales that produces. The weakest steps usually give the biggest gain.
+
+They assume conversion rates stay the same; lead quality, seasonality and market conditions will move the
+real numbers.
+""")
+    if not metrics["Total Leads"]:
+        st.info("No leads in this period.")
+        return
+
+    n_leads = st.slider("Leads in the next period", 50, 3000, value=500, step=50)
+    projection = data.project(metrics, n_leads)
+    base_closed, scenarios = data.what_if(metrics, n_leads)
+
+    left, right = st.columns([2, 3])
+    with left:
+        st.markdown("#### Expected outcomes")
+        for stage in data.FUNNEL_STAGES[1:]:
+            st.markdown(f"{stage}: **{projection[stage]:,.0f}**")
+        st.caption(f"≈ {base_closed:.1f} closed sales at today's {data.pct(metrics['Closed Sales'], metrics['Total Leads']):.2f}% close rate")
+    with right:
+        st.markdown("#### What-if: +10 points at one step")
+        rows = [{
+            "Step": s["stage"],
+            "Today": f"{s['rate']:.1f}%",
+            "Improved": f"{s['new_rate']:.1f}%" if s["new_rate"] is not None else "–",
+            "Closed sales": round(s["closed"], 1) if s["closed"] is not None else None,
+            "Extra sales": round(s["gain"], 1) if s["gain"] is not None else None,
+        } for s in scenarios]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch",
+                     column_config={"Extra sales": st.column_config.NumberColumn(format="+%.1f")})
+        best = max((s for s in scenarios if s["gain"] is not None), key=lambda s: s["gain"], default=None)
+        if best and best["gain"] > 0:
+            st.success(f"Biggest lever: **{best['stage']}** – +{best['gain']:.1f} sales "
+                       f"({best['gain'] / base_closed * 100:.0f}% more) per {n_leads:,} leads." if base_closed
+                       else f"Biggest lever: **{best['stage']}**.")
+
+    st.divider()
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### Pipeline health")
+        st.caption("Leads currently sitting in each later stage of the sales process.")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("In viewings", f"{metrics['Viewings Scheduled'] + metrics['Viewings Completed']:,}")
+        c2.metric("In negotiation", f"{metrics['Offers Made'] + metrics['Offers Accepted']:,}")
+        c3.metric("Ready to close", f"{metrics['Offers Accepted']:,}")
+    with right:
+        st.markdown("#### Targets")
+        actuals = {
+            "Qualification Rate": data.pct(metrics["Qualified Leads"], metrics["Total Leads"]),
+            "Viewing → Offer": data.pct(metrics["Offers Made"], metrics["Viewings Completed"]),
+            "Close Rate": data.pct(metrics["Closed Sales"], metrics["Total Leads"]),
+        }
+        for name, target in brand.targets.items():
+            value = actuals.get(name)
+            if value is None:
+                continue
+            met = value >= float(target)
+            st.markdown(f"{'✅' if met else '⚠️'} **{name}**: {value:.1f}% (target {target}%)")
+
+
+def render_chat(context):
+    st.caption("Ask anything about the figures on this dashboard. Claude answers from the selected reporting period.")
+    if not ai.is_configured():
+        st.info(AI_DISABLED_HELP)
+        return
+
+    history = st.session_state.setdefault("chat", [])
+    prompt = None
+    cols = st.columns(len(CHAT_SUGGESTIONS))
+    for col, suggestion in zip(cols, CHAT_SUGGESTIONS):
+        if col.button(suggestion, width="stretch"):
+            prompt = suggestion
+
+    for message in history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    typed = st.chat_input("Ask about leads, channels, conversion…")
+    prompt = typed or prompt
+    if prompt:
+        history.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        with st.chat_message("assistant"):
+            try:
+                answer = st.write_stream(ai.stream_chat(brand, context, history))
+                history.append({"role": "assistant", "content": answer})
+            except ai.AIError as e:
+                history.pop()
+                st.error(str(e))
+
+    if history and st.button("Clear conversation"):
+        history.clear()
+        st.rerun()
+
+
+# --------------------------------------------------------------------------- #
+# Page
+# --------------------------------------------------------------------------- #
 
 def main():
-    # Logo and Header
-    st.markdown('''
-    <div class="logo-container">
-        <h1 class="logo-text">Joseph Mews</h1>
-    </div>
-    ''', unsafe_allow_html=True)
+    ui.inject_css(brand)
+    today = date.today()
+    header_slot = st.container()
 
-    st.markdown('<h2 class="main-header">Lead Funnel Dashboard</h2>', unsafe_allow_html=True)
+    bundle, note = load_bundle(today)
 
-    # Subtitle with refresh button
-    col1, col2, col3 = st.columns([2, 3, 2])
-    with col1:
-        st.markdown("")  # Empty space
-    with col2:
-        subcol1, subcol2 = st.columns([0.5, 6])
-        with subcol1:
-            if st.button("🔄", help="Refresh Data", key="refresh_btn"):
-                st.cache_data.clear()
-                st.rerun()
-        with subcol2:
-            st.markdown('<p class="subtitle" style="margin-top: 0.3rem;">Real-time Sales Funnel Metrics • GDPR Compliant</p>', unsafe_allow_html=True)
-    with col3:
-        st.markdown("")  # Empty space
+    c_period, c_custom, _, c_refresh, c_ai = st.columns([2, 2, 2, 1, 1.6], vertical_alignment="bottom")
+    date_range, period_label = choose_period(bundle, c_period, c_custom)
+    if c_refresh.button("Refresh", width="stretch", help="Reload data from Google Sheets"):
+        st.cache_data.clear()
+        st.rerun()
 
-    # Filters in an expander
-    with st.expander("⚙️ Dashboard Settings", expanded=False):
-        col1, col2, col3 = st.columns(3)
+    with header_slot:
+        ui.header(brand, period_label, bundle.loaded_at, bundle.source)
+        if note:
+            st.info(note)
 
-        with col1:
-            show_funnel = st.checkbox("Show Funnel Chart", value=True)
-            show_trends = st.checkbox("Show Daily Trends", value=True)
+    daily = in_range(bundle.daily, date_range)
+    metrics = bundle.metrics if date_range is None else data.metrics_from_daily(daily)
+    prev = previous_period(bundle.daily, date_range)
+    totals = data.daily_totals(daily) if data.has_funnel_columns(daily) else None
+    spend = float(daily["Daily Budget"].sum()) if daily is not None and "Daily Budget" in daily.columns else 0.0
 
-        with col2:
-            show_projections = st.checkbox("Show Projections", value=True)
-            show_bottleneck = st.checkbox("Show Bottleneck Analysis", value=True)
-
-        with col3:
-            show_targets = st.checkbox("Show Performance Targets", value=True)
-            show_pipeline = st.checkbox("Show Pipeline Health", value=True)
-
-    # Get Google Sheets URL from environment variable
-    spreadsheet_url = os.getenv("GOOGLE_SHEETS_URL")
-
-    if not spreadsheet_url:
-        st.error("⚠️ Configuration Error")
-        st.info("""
-        **Google Sheets URL not configured.**
-
-        Please add `GOOGLE_SHEETS_URL` environment variable in Render:
-        1. Go to Render Dashboard
-        2. Select your service
-        3. Environment → Add Environment Variable
-        4. Key: `GOOGLE_SHEETS_URL`
-        5. Value: Your Google Sheets URL
-        """)
-        return
-
-    if not GOOGLE_SHEETS_AVAILABLE:
-        st.error("Google Sheets integration not available.")
-        return
-
-    # Load data with spinner
-    with st.spinner('Loading latest data...'):
-        client = get_google_sheets_client()
-        if not client:
-            st.error("Could not connect to Google Sheets. Please check credentials.")
-            return
-
-        df, daily_df, whatsapp_df, last_update = load_metrics_from_sheets(client, spreadsheet_url)
-
-    if df.empty:
-        st.error("No data found. Check your Google Sheets and ensure 'Metrics' worksheet exists.")
-        st.info("""
-        **Expected Format:**
-
-        **Worksheet 1: Metrics** (Total numbers)
-        | Stage | Count |
-        |-------|-------|
-        | Total Leads | 150 |
-        | Qualified Leads | 45 |
-        | Viewings Scheduled | 30 |
-        | Viewings Completed | 25 |
-        | Offers Made | 15 |
-        | Offers Accepted | 10 |
-        | Closed Sales | 8 |
-
-        **Worksheet 2: Daily** (Optional - for trends)
-        | Date | Total Leads | Qualified Leads | Viewings Completed | Offers Made | Offers Accepted | Closed Sales |
-        |------|-------------|-----------------|-----------------------|-------------|-----------------|--------------|
-        | 2024-01-01 | 10 | 3 | 2 | 1 | 1 | 1 |
-        | 2024-01-02 | 15 | 5 | 3 | 2 | 1 | 1 |
-        """)
-        return
-
-    # Calculate metrics
-    metrics = calculate_metrics(df)
-
-    # Calculate conversion rates
-    total = metrics.get('Total Leads', 0)
-    qualified = metrics.get('Qualified Leads', 0)
-    viewings_scheduled = metrics.get('Viewings Scheduled', 0)
-    viewings_completed = metrics.get('Viewings Completed', 0)
-    offers = metrics.get('Offers Made', 0)
-    offers_accepted = metrics.get('Offers Accepted', 0)
-    closed = metrics.get('Closed Sales', 0)
-
-    lead_to_qual_rate = (qualified / total * 100) if total > 0 else 0
-    qual_to_sched_rate = (viewings_scheduled / qualified * 100) if qualified > 0 else 0
-    sched_to_comp_rate = (viewings_completed / viewings_scheduled * 100) if viewings_scheduled > 0 else 0
-    comp_to_offer_rate = (offers / viewings_completed * 100) if viewings_completed > 0 else 0
-    offer_to_accept_rate = (offers_accepted / offers * 100) if offers > 0 else 0
-    accept_to_close_rate = (closed / offers_accepted * 100) if offers_accepted > 0 else 0
-    overall_close_rate = (closed / total * 100) if total > 0 else 0
-
-    # Sales Funnel Flow Chart
-    st.markdown("### 📊 Sales Funnel Flow")
-
-    # Row 1: Total Leads → Qualified → Viewings Scheduled → Viewings Completed
-    st.markdown(f"""
-    <div class="flow-container">
-        <div class="flow-metric">
-            <div class="flow-metric-label">Total Leads</div>
-            <div class="flow-metric-value">{total}</div>
-        </div>
-        <div class="flow-arrow">
-            <div class="flow-arrow-icon">→</div>
-            <div class="flow-arrow-rate">{lead_to_qual_rate:.1f}%</div>
-        </div>
-        <div class="flow-metric">
-            <div class="flow-metric-label">Qualified</div>
-            <div class="flow-metric-value">{qualified}</div>
-        </div>
-        <div class="flow-arrow">
-            <div class="flow-arrow-icon">→</div>
-            <div class="flow-arrow-rate">{qual_to_sched_rate:.1f}%</div>
-        </div>
-        <div class="flow-metric">
-            <div class="flow-metric-label">Viewings Scheduled</div>
-            <div class="flow-metric-value">{viewings_scheduled}</div>
-        </div>
-        <div class="flow-arrow">
-            <div class="flow-arrow-icon">→</div>
-            <div class="flow-arrow-rate">{sched_to_comp_rate:.1f}%</div>
-        </div>
-        <div class="flow-metric">
-            <div class="flow-metric-label">Viewings Completed</div>
-            <div class="flow-metric-value">{viewings_completed}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Row 2: Viewings Completed → Offers → Offers Accepted → Closed
-    st.markdown(f"""
-    <div class="flow-container">
-        <div class="flow-metric">
-            <div class="flow-metric-label">Viewings Completed</div>
-            <div class="flow-metric-value">{viewings_completed}</div>
-        </div>
-        <div class="flow-arrow">
-            <div class="flow-arrow-icon">→</div>
-            <div class="flow-arrow-rate">{comp_to_offer_rate:.1f}%</div>
-        </div>
-        <div class="flow-metric">
-            <div class="flow-metric-label">Offers</div>
-            <div class="flow-metric-value">{offers}</div>
-        </div>
-        <div class="flow-arrow">
-            <div class="flow-arrow-icon">→</div>
-            <div class="flow-arrow-rate">{offer_to_accept_rate:.1f}%</div>
-        </div>
-        <div class="flow-metric">
-            <div class="flow-metric-label">Offers Accepted</div>
-            <div class="flow-metric-value">{offers_accepted}</div>
-        </div>
-        <div class="flow-arrow">
-            <div class="flow-arrow-icon">→</div>
-            <div class="flow-arrow-rate">{accept_to_close_rate:.1f}%</div>
-        </div>
-        <div class="flow-metric">
-            <div class="flow-metric-label">Closed</div>
-            <div class="flow-metric-value">{closed}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Overall Close Rate
-    st.markdown(f"""
-    <div style="text-align: center; margin: 2rem 0;">
-        <div style="display: inline-block; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-                    padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-            <div style="font-size: 1rem; color: rgba(255,255,255,0.95); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Overall Close Rate</div>
-            <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_close_rate:.1f}%</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Visual Funnel Chart
-    if show_funnel:
-        st.markdown("---")
-        st.subheader("📊 Sales Funnel Visualization")
-
-    total = metrics.get('Total Leads', 0)
-    if total > 0 and show_funnel:
-        # Create funnel data
-        funnel_data = {
-            'Stage': [
-                'Total Leads',
-                'Qualified Leads',
-                'Viewings Completed',
-                'Offers Made',
-                'Offers Accepted',
-                'Closed Sales'
-            ],
-            'Count': [
-                metrics.get('Total Leads', 0),
-                metrics.get('Qualified Leads', 0),
-                metrics.get('Viewings Completed', 0),
-                metrics.get('Offers Made', 0),
-                metrics.get('Offers Accepted', 0),
-                metrics.get('Closed Sales', 0)
-            ]
-        }
-
-        # Create two columns for funnel and progress bars
-        col_funnel, col_progress = st.columns([3, 2])
-
-        with col_funnel:
-            # Create Plotly funnel chart
-            fig = go.Figure(go.Funnel(
-                y=funnel_data['Stage'],
-                x=funnel_data['Count'],
-                textposition="inside",
-                textinfo="value+percent initial",
-                marker={
-                    "color": ["#667eea", "#764ba2", "#f093fb", "#4facfe", "#00f2fe", "#43e97b"],
-                    "line": {"width": 2, "color": "white"}
-                },
-                connector={"line": {"color": "#667eea", "dash": "dot", "width": 3}}
-            ))
-
-            fig.update_layout(
-                height=500,
-                margin=dict(l=20, r=20, t=20, b=20),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(size=14, color='#333')
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col_progress:
-            st.markdown("#### Stage Conversion Rates")
-
-            # Progress bars for each stage
-            stages_progress = [
-                ("Qualified", metrics.get('Qualified Leads', 0), total),
-                ("Viewings", metrics.get('Viewings Completed', 0), total),
-                ("Offers", metrics.get('Offers Made', 0), total),
-                ("Accepted", metrics.get('Offers Accepted', 0), total),
-                ("Closed", metrics.get('Closed Sales', 0), total),
-            ]
-
-            for stage_name, stage_count, total_count in stages_progress:
-                percentage = (stage_count / total_count * 100) if total_count > 0 else 0
-                st.markdown(f"**{stage_name}**: {stage_count} ({percentage:.1f}%)")
-                st.progress(percentage / 100)
-                st.markdown("")  # spacing
-
-    # WhatsApp Metrics
+    whatsapp_df = in_range(bundle.whatsapp, date_range)
+    whatsapp = None
     if whatsapp_df is not None and not whatsapp_df.empty:
-        st.markdown("---")
-        st.subheader("💬 WhatsApp Metrics")
-
-        # Get latest day's data
-        latest_whatsapp = whatsapp_df.iloc[-1]
-
-        # Calculate conversion rates
-        messages_answered = latest_whatsapp.get('Messages Answered', 0)
-        relevant = latest_whatsapp.get('Relevant', 0)
-        positive = latest_whatsapp.get('Positive', 0)
-        scheduled = latest_whatsapp.get('Scheduled Leads', 0)
-
-        # Conversion rates
-        answered_to_relevant = (relevant / messages_answered * 100) if messages_answered > 0 else 0
-        relevant_to_positive = (positive / relevant * 100) if relevant > 0 else 0
-        positive_to_scheduled = (scheduled / positive * 100) if positive > 0 else 0
-        overall_conversion = (scheduled / messages_answered * 100) if messages_answered > 0 else 0
-
-        # WhatsApp Flow Chart
-        st.markdown("### 📊 WhatsApp Conversion Flow")
-
-        st.markdown(f"""
-        <div class="flow-container">
-            <div class="flow-metric">
-                <div class="flow-metric-label">Messages Answered</div>
-                <div class="flow-metric-value">{int(messages_answered)}</div>
-            </div>
-            <div class="flow-arrow">
-                <div class="flow-arrow-icon">→</div>
-                <div class="flow-arrow-rate">{answered_to_relevant:.1f}%</div>
-            </div>
-            <div class="flow-metric">
-                <div class="flow-metric-label">Relevant</div>
-                <div class="flow-metric-value">{int(relevant)}</div>
-            </div>
-            <div class="flow-arrow">
-                <div class="flow-arrow-icon">→</div>
-                <div class="flow-arrow-rate">{relevant_to_positive:.1f}%</div>
-            </div>
-            <div class="flow-metric">
-                <div class="flow-metric-label">Positive</div>
-                <div class="flow-metric-value">{int(positive)}</div>
-            </div>
-            <div class="flow-arrow">
-                <div class="flow-arrow-icon">→</div>
-                <div class="flow-arrow-rate">{positive_to_scheduled:.1f}%</div>
-            </div>
-            <div class="flow-metric">
-                <div class="flow-metric-label">Scheduled Leads</div>
-                <div class="flow-metric-value">{int(scheduled)}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Overall Conversion Rate
-        st.markdown(f"""
-        <div style="text-align: center; margin: 2rem 0;">
-            <div style="display: inline-block; background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
-                        padding: 1.5rem 3rem; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 1rem; color: rgba(255,255,255,0.95); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Overall Conversion Rate</div>
-                <div style="font-size: 3rem; font-weight: bold; color: white;">{overall_conversion:.1f}%</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Summary cards in columns
-        st.markdown("---")
-        st.markdown("#### 📈 Daily Summary")
-
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-        with col1:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
-                    Answered
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: white;">
-                    {}
-                </div>
-            </div>
-            """.format(int(messages_answered)), unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
-                    Positive
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: white;">
-                    {}
-                </div>
-            </div>
-            """.format(int(positive)), unsafe_allow_html=True)
-
-        with col3:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
-                    Negative
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: white;">
-                    {}
-                </div>
-            </div>
-            """.format(int(latest_whatsapp.get('Negative', 0))), unsafe_allow_html=True)
-
-        with col4:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
-                    Relevant
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: white;">
-                    {}
-                </div>
-            </div>
-            """.format(int(relevant)), unsafe_allow_html=True)
-
-        with col5:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
-                    Irrelevant
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: white;">
-                    {}
-                </div>
-            </div>
-            """.format(int(latest_whatsapp.get('Irrelevant', 0))), unsafe_allow_html=True)
-
-        with col6:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
-                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem; text-transform: uppercase;">
-                    Scheduled
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: white;">
-                    {}
-                </div>
-            </div>
-            """.format(int(scheduled)), unsafe_allow_html=True)
-
-        # Daily trends for WhatsApp
-        st.markdown("---")
-        st.markdown("#### 📊 WhatsApp Daily Trends")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Messages Answered trend
-            fig = go.Figure()
-
-            fig.add_trace(go.Scatter(
-                x=whatsapp_df['Date'],
-                y=whatsapp_df.get('Messages Answered', [0] * len(whatsapp_df)),
-                mode='lines+markers',
-                name='Messages Answered',
-                line=dict(color='#25D366', width=3),
-                marker=dict(size=8),
-                fill='tozeroy',
-                fillcolor='rgba(37, 211, 102, 0.1)'
-            ))
-
-            fig.update_layout(
-                title="Messages Answered",
-                height=300,
-                margin=dict(l=20, r=20, t=40, b=20),
-                xaxis_title="Date",
-                yaxis_title="Messages",
-                hovermode='x unified',
-                showlegend=False
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            # Positive vs Negative
-            fig = go.Figure()
-
-            fig.add_trace(go.Bar(
-                x=whatsapp_df['Date'],
-                y=whatsapp_df.get('Positive', [0] * len(whatsapp_df)),
-                name='Positive',
-                marker=dict(color='#43e97b')
-            ))
-
-            fig.add_trace(go.Bar(
-                x=whatsapp_df['Date'],
-                y=whatsapp_df.get('Negative', [0] * len(whatsapp_df)),
-                name='Negative',
-                marker=dict(color='#ff6b6b')
-            ))
-
-            fig.update_layout(
-                title="Positive vs Negative",
-                height=300,
-                margin=dict(l=20, r=20, t=40, b=20),
-                xaxis_title="Date",
-                yaxis_title="Messages",
-                hovermode='x unified',
-                barmode='group'
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Relevant vs Irrelevant & Scheduled Leads
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Relevant vs Irrelevant
-            fig = go.Figure()
-
-            fig.add_trace(go.Bar(
-                x=whatsapp_df['Date'],
-                y=whatsapp_df.get('Relevant', [0] * len(whatsapp_df)),
-                name='Relevant',
-                marker=dict(color='#667eea')
-            ))
-
-            fig.add_trace(go.Bar(
-                x=whatsapp_df['Date'],
-                y=whatsapp_df.get('Irrelevant', [0] * len(whatsapp_df)),
-                name='Irrelevant',
-                marker=dict(color='#f093fb')
-            ))
-
-            fig.update_layout(
-                title="Relevant vs Irrelevant",
-                height=300,
-                margin=dict(l=20, r=20, t=40, b=20),
-                xaxis_title="Date",
-                yaxis_title="Messages",
-                hovermode='x unified',
-                barmode='group'
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            # Scheduled Leads
-            fig = go.Figure()
-
-            fig.add_trace(go.Scatter(
-                x=whatsapp_df['Date'],
-                y=whatsapp_df.get('Scheduled Leads', [0] * len(whatsapp_df)),
-                mode='lines+markers',
-                name='Scheduled Leads',
-                line=dict(color='#4facfe', width=3),
-                marker=dict(size=8),
-                fill='tozeroy',
-                fillcolor='rgba(79, 172, 254, 0.1)'
-            ))
-
-            fig.update_layout(
-                title="Scheduled Leads",
-                height=300,
-                margin=dict(l=20, r=20, t=40, b=20),
-                xaxis_title="Date",
-                yaxis_title="Leads",
-                hovermode='x unified',
-                showlegend=False
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-    # Daily Trends
-    if show_trends and daily_df is not None and not daily_df.empty:
-        st.markdown("---")
-        st.subheader("📅 Daily Lead Trends")
-
-        # Date range filter
-        col1, col2, col3 = st.columns([2, 2, 3])
-
-        with col1:
-            min_date = daily_df['Date'].min().date()
-            max_date = daily_df['Date'].max().date()
-            start_date = st.date_input("From", value=min_date, min_value=min_date, max_value=max_date)
-
-        with col2:
-            end_date = st.date_input("To", value=max_date, min_value=min_date, max_value=max_date)
-
-        with col3:
-            st.markdown("##### Quick Filters")
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                if st.button("Last 7 Days"):
-                    start_date = max_date - pd.Timedelta(days=7)
-            with col_b:
-                if st.button("Last 30 Days"):
-                    start_date = max_date - pd.Timedelta(days=30)
-            with col_c:
-                if st.button("All Time"):
-                    start_date = min_date
-
-        # Filter data by date range
-        mask = (daily_df['Date'].dt.date >= start_date) & (daily_df['Date'].dt.date <= end_date)
-        filtered_daily = daily_df[mask]
-
-        if not filtered_daily.empty:
-            # Daily totals line chart
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("#### 📊 Daily Total Leads")
-
-                fig = go.Figure()
-
-                fig.add_trace(go.Scatter(
-                    x=filtered_daily['Date'],
-                    y=filtered_daily.get('Total Leads', [0] * len(filtered_daily)),
-                    mode='lines+markers',
-                    name='Total Leads',
-                    line=dict(color='#667eea', width=3),
-                    marker=dict(size=8),
-                    fill='tozeroy',
-                    fillcolor='rgba(102, 126, 234, 0.1)'
-                ))
-
-                fig.update_layout(
-                    height=350,
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    xaxis_title="Date",
-                    yaxis_title="Leads",
-                    hovermode='x unified',
-                    showlegend=False
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Daily stats
-                total_period = filtered_daily.get('Total Leads', pd.Series([0])).sum()
-                avg_daily = filtered_daily.get('Total Leads', pd.Series([0])).mean()
-
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("Total in Period", int(total_period))
-                with col_b:
-                    st.metric("Daily Average", f"{avg_daily:.1f}")
-
-            with col2:
-                st.markdown("#### 🎯 Daily Closed Sales")
-
-                fig = go.Figure()
-
-                fig.add_trace(go.Bar(
-                    x=filtered_daily['Date'],
-                    y=filtered_daily.get('Closed Sales', [0] * len(filtered_daily)),
-                    name='Closed Sales',
-                    marker=dict(
-                        color=filtered_daily.get('Closed Sales', [0] * len(filtered_daily)),
-                        colorscale='Greens',
-                        line=dict(color='white', width=1)
-                    )
-                ))
-
-                fig.update_layout(
-                    height=350,
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    xaxis_title="Date",
-                    yaxis_title="Sales",
-                    hovermode='x unified',
-                    showlegend=False
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Sales stats
-                total_sales = filtered_daily.get('Closed Sales', pd.Series([0])).sum()
-                avg_sales = filtered_daily.get('Closed Sales', pd.Series([0])).mean()
-
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("Total Sales", int(total_sales))
-                with col_b:
-                    st.metric("Daily Average", f"{avg_sales:.1f}")
-
-            # Budget Analysis (if budget column exists)
-            if 'Daily Budget' in filtered_daily.columns:
-                st.markdown("---")
-                st.markdown("#### 💰 Budget & Cost Analysis")
-
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    st.markdown("##### 📊 Daily Budget vs Leads")
-
-                    fig = go.Figure()
-
-                    # Budget bars
-                    fig.add_trace(go.Bar(
-                        x=filtered_daily['Date'],
-                        y=filtered_daily['Daily Budget'],
-                        name='Daily Budget',
-                        marker=dict(color='rgba(102, 126, 234, 0.6)'),
-                        yaxis='y'
-                    ))
-
-                    # Leads line
-                    fig.add_trace(go.Scatter(
-                        x=filtered_daily['Date'],
-                        y=filtered_daily.get('Total Leads', [0] * len(filtered_daily)),
-                        name='Total Leads',
-                        line=dict(color='#43e97b', width=3),
-                        marker=dict(size=8),
-                        yaxis='y2'
-                    ))
-
-                    fig.update_layout(
-                        height=300,
-                        margin=dict(l=20, r=20, t=20, b=20),
-                        xaxis_title="Date",
-                        yaxis=dict(title="Budget (£)", side='left'),
-                        yaxis2=dict(title="Leads", side='right', overlaying='y'),
-                        hovermode='x unified',
-                        showlegend=True,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
-
-                with col2:
-                    st.markdown("##### 💸 Cost Per Lead")
-
-                    # Calculate cost per lead
-                    filtered_daily['Cost Per Lead'] = filtered_daily.apply(
-                        lambda row: row['Daily Budget'] / row['Total Leads'] if row.get('Total Leads', 0) > 0 else 0,
-                        axis=1
-                    )
-
-                    fig = go.Figure()
-
-                    fig.add_trace(go.Scatter(
-                        x=filtered_daily['Date'],
-                        y=filtered_daily['Cost Per Lead'],
-                        mode='lines+markers',
-                        name='Cost Per Lead',
-                        line=dict(color='#f093fb', width=3),
-                        marker=dict(size=8),
-                        fill='tozeroy',
-                        fillcolor='rgba(240, 147, 251, 0.1)'
-                    ))
-
-                    fig.update_layout(
-                        height=300,
-                        margin=dict(l=20, r=20, t=20, b=20),
-                        xaxis_title="Date",
-                        yaxis_title="Cost (£)",
-                        hovermode='x unified',
-                        showlegend=False
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
-
-                    # Average cost per lead
-                    avg_cost = filtered_daily['Cost Per Lead'].mean()
-                    st.metric("Avg Cost Per Lead", f"£{avg_cost:.2f}")
-
-                with col3:
-                    st.markdown("##### 📈 Budget Efficiency")
-
-                    # Calculate efficiency metrics
-                    total_budget = filtered_daily['Daily Budget'].sum()
-                    total_leads_period = filtered_daily.get('Total Leads', pd.Series([0])).sum()
-                    total_sales_period = filtered_daily.get('Closed Sales', pd.Series([0])).sum()
-
-                    overall_cost_per_lead = total_budget / total_leads_period if total_leads_period > 0 else 0
-                    cost_per_sale = total_budget / total_sales_period if total_sales_period > 0 else 0
-
-                    st.metric("Total Budget", f"£{total_budget:,.0f}")
-                    st.metric("Cost Per Lead", f"£{overall_cost_per_lead:.2f}")
-                    st.metric("Cost Per Sale", f"£{cost_per_sale:.2f}")
-
-                    # Efficiency score
-                    if overall_cost_per_lead > 0:
-                        efficiency = (1 / overall_cost_per_lead) * 100
-                        st.metric("Efficiency Score", f"{efficiency:.1f}")
-
-            # Multi-line funnel progression
-            st.markdown("---")
-            st.markdown("#### 📈 Funnel Progression Over Time")
-
-            fig = go.Figure()
-
-            metrics_to_plot = [
-                ('Total Leads', '#667eea'),
-                ('Qualified Leads', '#764ba2'),
-                ('Viewings Completed', '#f093fb'),
-                ('Offers Made', '#4facfe'),
-                ('Closed Sales', '#43e97b')
-            ]
-
-            for metric_name, color in metrics_to_plot:
-                if metric_name in filtered_daily.columns:
-                    fig.add_trace(go.Scatter(
-                        x=filtered_daily['Date'],
-                        y=filtered_daily[metric_name],
-                        mode='lines+markers',
-                        name=metric_name,
-                        line=dict(color=color, width=2),
-                        marker=dict(size=6)
-                    ))
-
-            fig.update_layout(
-                height=400,
-                margin=dict(l=20, r=20, t=20, b=60),
-                xaxis_title="Date",
-                yaxis_title="Count",
-                hovermode='x unified',
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.3,
-                    xanchor="center",
-                    x=0.5
-                )
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning("No data available for selected date range")
-
-    elif show_trends:
-        st.info("💡 **Add Daily Tracking:** Create a 'Daily' worksheet in your Google Sheets to see trends over time!")
-
-    # Bottleneck Analysis
-    if show_bottleneck and total > 0:
-        st.markdown("---")
-        st.subheader("🔴 Bottleneck Analysis")
-
-        bottlenecks = calculate_bottleneck(metrics)
-
-        if bottlenecks:
-            # Highlight the biggest bottleneck
-            worst = bottlenecks[0]
-
-            col1, col2 = st.columns([2, 3])
-
-            with col1:
-                st.error(f"### 🚨 Critical Bottleneck")
-                st.markdown(f"""
-                **{worst['stage']}**
-                - Conversion Rate: **{worst['rate']:.1f}%**
-                - Drop-off: **{worst['drop_off']}** leads
-                - From: {worst['from']} → To: {worst['to']}
-                """)
-
-                # Recommendation
-                if worst['rate'] < 50:
-                    st.warning("⚠️ **Action Needed:** Focus improvement efforts here for maximum impact!")
-
-            with col2:
-                st.markdown("#### All Conversion Stages")
-
-                # Create bar chart for all stages
-                bottleneck_df = pd.DataFrame(bottlenecks)
-
-                fig = px.bar(
-                    bottleneck_df,
-                    x='rate',
-                    y='stage',
-                    orientation='h',
-                    color='rate',
-                    color_continuous_scale=['#ff4444', '#ffaa00', '#44ff44'],
-                    labels={'rate': 'Conversion Rate (%)', 'stage': 'Stage'},
-                    text='rate'
-                )
-
-                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                fig.update_layout(
-                    height=300,
-                    showlegend=False,
-                    margin=dict(l=20, r=20, t=20, b=20)
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-    # Projections & Forecasting
-    if show_projections and total > 0:
-        st.markdown("---")
-        st.subheader("🔮 Projections & Forecasting")
-
-        projections = calculate_projections(metrics)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("#### 📊 Next 100 Leads Projection")
-            st.markdown("*Based on current conversion rates*")
-
-            st.metric("Expected Qualified", projections['projected_qualified'])
-            st.metric("Expected Viewings", projections['projected_viewings'])
-            st.metric("Expected Offers", projections['projected_offers'])
-            st.metric("Expected Closed Sales", projections['projected_closed'],
-                     delta=f"{projections['current_close_rate']:.1f}% close rate")
-
-        with col2:
-            st.markdown("#### 🎯 What-If Scenarios")
-            st.markdown("*Impact of 10% improvement*")
-
-            current_closed = projections['projected_closed']
-
-            st.info(f"**If Qualification improves by 10%:**")
-            st.write(f"Closed Sales: {projections['if_qual_improves_10']} (+{projections['if_qual_improves_10'] - current_closed})")
-
-            st.info(f"**If Viewing Conversion improves by 10%:**")
-            st.write(f"Closed Sales: {projections['if_viewing_improves_10']} (+{projections['if_viewing_improves_10'] - current_closed})")
-
-            st.success("💡 **Tip:** Focus on the bottleneck stage for maximum ROI")
-
-    # Pipeline Health & Performance Targets
-    if (show_pipeline or show_targets) and total > 0:
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-
-        if show_pipeline:
-            with col1:
-                st.markdown("#### 📊 Pipeline Health")
-                pipeline_stages = [
-                    ("In Viewings", metrics.get('Viewings Scheduled', 0) + metrics.get('Viewings Completed', 0)),
-                    ("In Negotiation", metrics.get('Offers Made', 0) + metrics.get('Offers Accepted', 0)),
-                    ("Ready to Close", metrics.get('Offers Accepted', 0))
-                ]
-
-                for stage, count in pipeline_stages:
-                    st.metric(stage, count)
-
-        if show_targets:
-            with col2:
-                st.markdown("#### 🎯 Performance Targets")
-
-                # Calculate rates
-                qualified_rate = (metrics.get('Qualified Leads', 0) / total * 100) if total > 0 else 0
-                viewing_to_offer = (metrics.get('Offers Made', 0) / metrics.get('Viewings Completed', 1) * 100) if metrics.get('Viewings Completed', 0) > 0 else 0
-                close_rate = (metrics.get('Closed Sales', 0) / total * 100) if total > 0 else 0
-
-                # Calculate if targets are being met (example thresholds)
-                targets = {
-                    "Qualification Rate": (qualified_rate, 30, "%"),
-                    "Close Rate": (close_rate, 5, "%"),
-                    "Viewing Conversion": (viewing_to_offer, 40, "%")
-                }
-
-                for metric_name, (value, target, unit) in targets.items():
-                    if value >= target:
-                        st.success(f"✅ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
-                    else:
-                        st.error(f"❌ {metric_name}: {value:.1f}{unit} (Target: {target}{unit})")
-
-    # Last updated timestamp
-    if last_update:
-        st.markdown(f"""
-        <div class="last-update">
-            🕐 Last updated: {last_update.strftime('%B %d, %Y at %H:%M:%S')}
-            <br>
-            <small>Use 🔄 button or Rerun from menu to refresh</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Footer
-    st.markdown("""
-    <div class="footer">
-        🔒 GDPR Compliant Dashboard • No Personal Data Stored or Displayed
-        <br>
-        Joseph Mews © 2024 • All Rights Reserved
-    </div>
-    """, unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
+        whatsapp = {c: int(whatsapp_df[c].sum()) if c in whatsapp_df.columns else 0
+                    for c in data.WHATSAPP_NUMERIC}
+
+    steps = data.conversion_steps(metrics)
+    scored = data.score_leads(bundle.leads, today)
+    ai_scored = False
+    if scored is not None:
+        scored, ai_scored = apply_ai_scores(scored)
+        counts = scored["Temperature"].value_counts()
+        hot, warm, cold = (int(counts.get(t, 0)) for t in ("Hot", "Warm", "Cold"))
+        temp = {
+            "hot": hot, "warm": warm, "cold": cold,
+            "quality_score": (hot * 3 + warm * 2 + cold) / len(scored),
+            "basis": "open leads",
+            "method": "scored by Claude" if ai_scored else "rule-based per-lead score",
+            "notes": {"Hot": "ready to transact", "Warm": "needs nurturing", "Cold": "early or quiet"},
+        }
+    else:
+        temp = data.funnel_temperature(metrics)
+        temp.update({
+            "basis": "leads", "method": "estimated from funnel counts",
+            "notes": {
+                "Hot": f"{data.pct(metrics['Closed Sales'], temp['hot']):.0f}% → close" if temp["hot"] else "",
+                "Warm": f"{data.pct(temp['hot'], temp['warm']):.0f}% → hot" if temp["warm"] else "",
+                "Cold": f"{data.pct(temp['warm'], temp['cold']):.0f}% → warm" if temp["cold"] else "",
+            },
+        })
+    sources = data.source_breakdown(daily, scored)
+
+    ai_temp = {k: v for k, v in temp.items() if k != "notes"}
+    context = build_ai_context(bundle, period_label, metrics, steps, ai_temp, whatsapp, sources, totals, scored, today)
+    st.session_state.context_key = fingerprint(context)
+
+    insights_ready = (st.session_state.get("insights", {}).get("key") == st.session_state.context_key)
+    if c_ai.button("Refresh AI insights" if insights_ready else "✨ AI insights", type="primary", width="stretch",
+                   disabled=not ai.is_configured(), help=None if ai.is_configured() else AI_DISABLED_HELP):
+        with st.spinner("Claude is analysing the dashboard…"):
+            try:
+                st.session_state.insights = {"key": st.session_state.context_key,
+                                             "data": ai.generate_insights(brand, context)}
+            except ai.AIError as e:
+                st.error(str(e))
+
+    tabs = st.tabs(["Overview", "Funnel & Scoring", "Channels", "Trends", "Forecast", "Ask AI"])
+    with tabs[0]:
+        render_overview(metrics, prev, totals, temp, spend, context, today)
+    with tabs[1]:
+        render_funnel_and_scoring(metrics, steps, temp, scored, ai_scored, today)
+    with tabs[2]:
+        render_channels(whatsapp_df, whatsapp, sources)
+    with tabs[3]:
+        render_trends(totals)
+    with tabs[4]:
+        render_forecast(metrics, steps)
+    with tabs[5]:
+        render_chat(context)
+
+    ui.footer(brand, datetime.now().year)
+
+
+main()
