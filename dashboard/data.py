@@ -339,28 +339,6 @@ def bottlenecks(metrics):
     return sorted((s for s in conversion_steps(metrics) if s["from"] > 0), key=lambda s: s["rate"])
 
 
-def project(metrics, n_leads):
-    total = metrics.get("Total Leads", 0)
-    if not total:
-        return {}
-    return {stage: n_leads * metrics.get(stage, 0) / total for stage in FUNNEL_STAGES}
-
-
-def what_if(metrics, n_leads, uplift_points=10.0):
-    """Extra closed sales if one conversion step improves by `uplift_points` percentage points."""
-    base_closed = project(metrics, n_leads).get("Closed Sales", 0.0)
-    rows = []
-    for step in conversion_steps(metrics):
-        rate = step["rate"]
-        if rate <= 0:
-            rows.append({**step, "new_rate": None, "closed": None, "gain": None})
-            continue
-        new_rate = min(rate + uplift_points, 100.0)
-        closed = base_closed * new_rate / rate
-        rows.append({**step, "new_rate": new_rate, "closed": closed, "gain": closed - base_closed})
-    return base_closed, rows
-
-
 def funnel_temperature(metrics):
     """Hot/Warm/Cold estimated from aggregate funnel counts (used when there is no Leads sheet)."""
     total = metrics.get("Total Leads", 0)

@@ -1,4 +1,4 @@
-"""Claude-powered features: section insights, executive report, chat and lead scoring."""
+"""Claude-powered features: section insights, chat and lead scoring."""
 import json
 import os
 
@@ -15,7 +15,7 @@ MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
 # recommended fallback model instead of returning a refusal.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
-INSIGHT_SECTIONS = ["overview", "funnel", "scoring", "channels", "trends", "forecast"]
+INSIGHT_SECTIONS = ["overview", "funnel", "scoring", "channels", "trends"]
 
 
 class AIError(Exception):
@@ -106,8 +106,7 @@ def generate_insights(brand, context):
         "mean for the team and what to do. If a section has no data, say so in one sentence instead of guessing.\n\n"
         "Sections: overview (headline performance for the period), funnel (stage-by-stage conversion; call "
         "rates under 30% weak, 30-70% average, above 70% strong), scoring (lead quality and the Hot/Warm/Cold "
-        "mix), channels (WhatsApp and lead sources), trends (direction over time), forecast (what the current "
-        "rates imply and where improvement pays most). Each section is 2-3 sentences of plain text, no markdown. "
+        "mix), channels (WhatsApp and lead sources), trends (direction over time). Each section is 2-3 sentences of plain text, no markdown. "
         "'actions' are the three highest-impact things to do this week, most important first, one sentence each."
     )
     schema = {
@@ -120,18 +119,6 @@ def generate_insights(brand, context):
         "additionalProperties": False,
     }
     return _json_call(system, _data_block(context), schema, max_tokens=6000, effort="low")
-
-
-def stream_report(brand, context, today):
-    system = (
-        f"You write the executive lead-funnel report for the leadership team of {brand.name}, a "
-        f"{brand.industry} business. Today is {today:%d %B %Y}. The report is downloaded and forwarded by "
-        "email, so it must stand on its own: a title naming the reporting period, a short headline summary, "
-        "then funnel performance, lead quality, channels, risks, and recommended next steps. Use the figures "
-        f"from the data (currency {brand.currency}) and keep it to about one page of Markdown."
-    )
-    messages = [{"role": "user", "content": _data_block(context) + "\n\nWrite the report."}]
-    return _text_stream(system, messages, max_tokens=8000, effort="medium")
 
 
 def stream_chat(brand, context, history):

@@ -1,7 +1,7 @@
 # Lead Funnel Dashboard
 
 A Streamlit dashboard for lead-generation projects: funnel performance, lead scoring, channels,
-trends and forecasts, with Claude (Opus 5.5) built in. Data comes from Google Sheets; without a sheet
+trends, with Claude (Opus 5.5) built in. Data comes from Google Sheets; without a sheet
 it runs on built-in demo data whose dates always end today, so it is ready for client demos.
 
 It is white-label: the client name, colours, currency and targets come from `brand.json` or
@@ -11,11 +11,11 @@ environment variables.
 
 | Tab | Contents |
 |-----|----------|
-| **Overview** | KPI row with change vs the previous period, funnel at a glance, executive report, priority actions |
-| **Funnel & Scoring** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, Hot/Warm/Cold lead scoring, open-lead table |
+| **Overview** | KPI row with change vs the previous period, funnel at a glance, priority actions |
+| **Funnel** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, targets |
+| **Lead Scoring** | Hot/Warm/Cold split, leads by stage and by source (aggregate, no per-lead table) |
 | **Channels** | WhatsApp conversion flow and conversation quality, performance by lead source |
 | **Trends** | Daily leads and sales with 7-day averages, lead mix over time, spend and cost per lead |
-| **Forecast** | Expected outcomes for the next N leads, what-if per conversion step, pipeline health, targets |
 | **Ask AI** | Chat with Claude about the figures on the dashboard |
 
 A **reporting period** selector (last 7/30/90 days, custom range or all time) filters every tab, and
@@ -28,9 +28,8 @@ safety classifier, the API retries it on Anthropic's recommended fallback model)
 `ANTHROPIC_API_KEY`; without it the buttons are disabled and everything else works.
 
 - **AI insights** – one request returns a short commentary for every tab plus the top three actions.
-- **Executive report** – a one-page Markdown report for leadership, downloadable as `.md`.
 - **Lead scoring with Claude** – re-scores each open lead from its stage, recency, budget and last
-  message, with a reason and a next action for the agent.
+  message; the dashboard shows the aggregate Hot/Warm/Cold picture.
 - **Ask AI** – questions about the current reporting period, answered from the dashboard data.
 
 ## Google Sheets format
