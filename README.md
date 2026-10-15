@@ -11,8 +11,9 @@ environment variables.
 
 | Tab | Contents |
 |-----|----------|
-| **Overview** | KPI row with change vs the previous period, funnel at a glance, executive report, priority actions |
-| **Funnel & Scoring** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, Hot/Warm/Cold lead scoring, open-lead table, targets |
+| **Overview** | KPI row with change vs the previous period, funnel at a glance, priority actions |
+| **Funnel** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, targets |
+| **Lead Scoring** | Hot/Warm/Cold split, leads by stage and by source (aggregate, no per-lead table) |
 | **Channels** | WhatsApp conversion flow and conversation quality, performance by lead source |
 | **Trends** | Daily leads and sales with 7-day averages, lead mix over time, spend and cost per lead |
 | **Ask AI** | Chat with Claude about the figures on the dashboard |
@@ -27,9 +28,8 @@ safety classifier, the API retries it on Anthropic's recommended fallback model)
 `ANTHROPIC_API_KEY`; without it the buttons are disabled and everything else works.
 
 - **AI insights** – one request returns a short commentary for every tab plus the top three actions.
-- **Executive report** – a one-page Markdown report for leadership, downloadable as `.md`.
 - **Lead scoring with Claude** – re-scores each open lead from its stage, recency, budget and last
-  message, with a reason and a next action for the agent.
+  message; the dashboard shows the aggregate Hot/Warm/Cold picture.
 - **Ask AI** – questions about the current reporting period, answered from the dashboard data.
 
 ## Google Sheets format

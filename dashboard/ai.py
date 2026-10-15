@@ -1,4 +1,4 @@
-"""Claude-powered features: section insights, executive report, chat and lead scoring."""
+"""Claude-powered features: section insights, chat and lead scoring."""
 import json
 import os
 
@@ -119,18 +119,6 @@ def generate_insights(brand, context):
         "additionalProperties": False,
     }
     return _json_call(system, _data_block(context), schema, max_tokens=6000, effort="low")
-
-
-def stream_report(brand, context, today):
-    system = (
-        f"You write the executive lead-funnel report for the leadership team of {brand.name}, a "
-        f"{brand.industry} business. Today is {today:%d %B %Y}. The report is downloaded and forwarded by "
-        "email, so it must stand on its own: a title naming the reporting period, a short headline summary, "
-        "then funnel performance, lead quality, channels, risks, and recommended next steps. Use the figures "
-        f"from the data (currency {brand.currency}) and keep it to about one page of Markdown."
-    )
-    messages = [{"role": "user", "content": _data_block(context) + "\n\nWrite the report."}]
-    return _text_stream(system, messages, max_tokens=8000, effort="medium")
 
 
 def stream_chat(brand, context, history):
