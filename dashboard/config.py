@@ -21,7 +21,7 @@ class Brand:
     logo_url: str = ""
     currency: str = "£"
     lead_id_prefix: str = "JM"
-    # Targets shown on the Forecast tab, in percent
+    # Targets shown on the Funnel & Scoring tab, in percent
     targets: dict = field(default_factory=lambda: {
         "Qualification Rate": 30.0,
         "Viewing → Offer": 40.0,

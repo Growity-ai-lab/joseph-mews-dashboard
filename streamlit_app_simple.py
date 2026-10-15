@@ -255,6 +255,22 @@ def render_report(context, today):
                            file_name=f"{slug}-lead-report-{cached['date']:%Y-%m-%d}.md", mime="text/markdown")
 
 
+def render_targets(metrics):
+    actuals = {
+        "Qualification Rate": data.pct(metrics["Qualified Leads"], metrics["Total Leads"]),
+        "Viewing → Offer": data.pct(metrics["Offers Made"], metrics["Viewings Completed"]),
+        "Close Rate": data.pct(metrics["Closed Sales"], metrics["Total Leads"]),
+    }
+    lines = []
+    for name, target in brand.targets.items():
+        value = actuals.get(name)
+        if value is not None:
+            lines.append(f"{'✅' if value >= float(target) else '⚠️'} **{name}**: {value:.1f}% (target {target}%)")
+    if lines:
+        st.markdown("#### Targets")
+        st.markdown("\n\n".join(lines))
+
+
 def render_funnel_and_scoring(metrics, steps, temp, scored, ai_scored, today):
     st.markdown("### Funnel")
     section_insight("funnel")
@@ -288,6 +304,7 @@ def render_funnel_and_scoring(metrics, steps, temp, scored, ai_scored, today):
             ui.kpi(w["stage"], f"{w['rate']:.1f}%", f"{w['drop_off']:,} of {w['from']:,} leads lost at this step")
         with c2:
             st.markdown("\n".join(f"- {tip}" for tip in data.STAGE_PLAYBOOK[w["stage"]]))
+    render_targets(metrics)
 
     st.divider()
     st.markdown("### Lead scoring")
@@ -468,75 +485,6 @@ def render_trends(totals):
             ui.chart(fig, "trend_quality", legend=False, time_series=True)
 
 
-def render_forecast(metrics, steps):
-    section_insight("forecast")
-    with st.expander("How are these projections calculated?"):
-        st.markdown("""
-These are **data-driven projections, not guesses**: they apply the conversion rates measured in the
-selected reporting period to a number of future leads.
-
-- **Expected outcomes** = future leads × (stage count ÷ leads) for each stage.
-- **What-if** = raise one conversion step by 10 percentage points, keep the others unchanged, and see how
-  many extra sales that produces. The weakest steps usually give the biggest gain.
-
-They assume conversion rates stay the same; lead quality, seasonality and market conditions will move the
-real numbers.
-""")
-    if not metrics["Total Leads"]:
-        st.info("No leads in this period.")
-        return
-
-    n_leads = st.slider("Leads in the next period", 50, 3000, value=500, step=50)
-    projection = data.project(metrics, n_leads)
-    base_closed, scenarios = data.what_if(metrics, n_leads)
-
-    left, right = st.columns([2, 3])
-    with left:
-        st.markdown("#### Expected outcomes")
-        for stage in data.FUNNEL_STAGES[1:]:
-            st.markdown(f"{stage}: **{projection[stage]:,.0f}**")
-        st.caption(f"≈ {base_closed:.1f} closed sales at today's {data.pct(metrics['Closed Sales'], metrics['Total Leads']):.2f}% close rate")
-    with right:
-        st.markdown("#### What-if: +10 points at one step")
-        rows = [{
-            "Step": s["stage"],
-            "Today": f"{s['rate']:.1f}%",
-            "Improved": f"{s['new_rate']:.1f}%" if s["new_rate"] is not None else "–",
-            "Closed sales": round(s["closed"], 1) if s["closed"] is not None else None,
-            "Extra sales": round(s["gain"], 1) if s["gain"] is not None else None,
-        } for s in scenarios]
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch",
-                     column_config={"Extra sales": st.column_config.NumberColumn(format="+%.1f")})
-        best = max((s for s in scenarios if s["gain"] is not None), key=lambda s: s["gain"], default=None)
-        if best and best["gain"] > 0:
-            st.success(f"Biggest lever: **{best['stage']}** – +{best['gain']:.1f} sales "
-                       f"({best['gain'] / base_closed * 100:.0f}% more) per {n_leads:,} leads." if base_closed
-                       else f"Biggest lever: **{best['stage']}**.")
-
-    st.divider()
-    left, right = st.columns(2)
-    with left:
-        st.markdown("#### Pipeline health")
-        st.caption("Leads currently sitting in each later stage of the sales process.")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("In viewings", f"{metrics['Viewings Scheduled'] + metrics['Viewings Completed']:,}")
-        c2.metric("In negotiation", f"{metrics['Offers Made'] + metrics['Offers Accepted']:,}")
-        c3.metric("Ready to close", f"{metrics['Offers Accepted']:,}")
-    with right:
-        st.markdown("#### Targets")
-        actuals = {
-            "Qualification Rate": data.pct(metrics["Qualified Leads"], metrics["Total Leads"]),
-            "Viewing → Offer": data.pct(metrics["Offers Made"], metrics["Viewings Completed"]),
-            "Close Rate": data.pct(metrics["Closed Sales"], metrics["Total Leads"]),
-        }
-        for name, target in brand.targets.items():
-            value = actuals.get(name)
-            if value is None:
-                continue
-            met = value >= float(target)
-            st.markdown(f"{'✅' if met else '⚠️'} **{name}**: {value:.1f}% (target {target}%)")
-
-
 def render_chat(context):
     st.caption("Ask anything about the figures on this dashboard. Claude answers from the selected reporting period.")
     if not ai.is_configured():
@@ -647,7 +595,7 @@ def main():
             except ai.AIError as e:
                 st.error(str(e))
 
-    tabs = st.tabs(["Overview", "Funnel & Scoring", "Channels", "Trends", "Forecast", "Ask AI"])
+    tabs = st.tabs(["Overview", "Funnel & Scoring", "Channels", "Trends", "Ask AI"])
     with tabs[0]:
         render_overview(metrics, prev, totals, temp, spend, context, today)
     with tabs[1]:
@@ -657,8 +605,6 @@ def main():
     with tabs[3]:
         render_trends(totals)
     with tabs[4]:
-        render_forecast(metrics, steps)
-    with tabs[5]:
         render_chat(context)
 
     ui.footer(brand, datetime.now().year)

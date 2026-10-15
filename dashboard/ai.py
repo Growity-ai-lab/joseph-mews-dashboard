@@ -15,7 +15,7 @@ MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
 # recommended fallback model instead of returning a refusal.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
-INSIGHT_SECTIONS = ["overview", "funnel", "scoring", "channels", "trends", "forecast"]
+INSIGHT_SECTIONS = ["overview", "funnel", "scoring", "channels", "trends"]
 
 
 class AIError(Exception):
@@ -106,8 +106,7 @@ def generate_insights(brand, context):
         "mean for the team and what to do. If a section has no data, say so in one sentence instead of guessing.\n\n"
         "Sections: overview (headline performance for the period), funnel (stage-by-stage conversion; call "
         "rates under 30% weak, 30-70% average, above 70% strong), scoring (lead quality and the Hot/Warm/Cold "
-        "mix), channels (WhatsApp and lead sources), trends (direction over time), forecast (what the current "
-        "rates imply and where improvement pays most). Each section is 2-3 sentences of plain text, no markdown. "
+        "mix), channels (WhatsApp and lead sources), trends (direction over time). Each section is 2-3 sentences of plain text, no markdown. "
         "'actions' are the three highest-impact things to do this week, most important first, one sentence each."
     )
     schema = {

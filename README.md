@@ -1,7 +1,7 @@
 # Lead Funnel Dashboard
 
 A Streamlit dashboard for lead-generation projects: funnel performance, lead scoring, channels,
-trends and forecasts, with Claude (Opus 5.5) built in. Data comes from Google Sheets; without a sheet
+trends, with Claude (Opus 5.5) built in. Data comes from Google Sheets; without a sheet
 it runs on built-in demo data whose dates always end today, so it is ready for client demos.
 
 It is white-label: the client name, colours, currency and targets come from `brand.json` or
@@ -12,10 +12,9 @@ environment variables.
 | Tab | Contents |
 |-----|----------|
 | **Overview** | KPI row with change vs the previous period, funnel at a glance, executive report, priority actions |
-| **Funnel & Scoring** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, Hot/Warm/Cold lead scoring, open-lead table |
+| **Funnel & Scoring** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, Hot/Warm/Cold lead scoring, open-lead table, targets |
 | **Channels** | WhatsApp conversion flow and conversation quality, performance by lead source |
 | **Trends** | Daily leads and sales with 7-day averages, lead mix over time, spend and cost per lead |
-| **Forecast** | Expected outcomes for the next N leads, what-if per conversion step, pipeline health, targets |
 | **Ask AI** | Chat with Claude about the figures on the dashboard |
 
 A **reporting period** selector (last 7/30/90 days, custom range or all time) filters every tab, and
