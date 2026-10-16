@@ -164,18 +164,58 @@ def metrics_from_sheet(df):
     return metrics
 
 
+# Furthest funnel stage a lead has reached (Lost leads only count as a lead)
+LEAD_STAGE_RANK = {"New": 0, "Contacted": 1, "Qualified": 2, "Viewing Scheduled": 3, "Viewing Completed": 4,
+                   "Offer Made": 5, "Offer Accepted": 6, "Closed": 7}
+RANK_TO_FUNNEL = {2: "Qualified Leads", 3: "Viewings Scheduled", 4: "Viewings Completed",
+                  5: "Offers Made", 6: "Offers Accepted", 7: "Closed Sales"}
+
+
+def daily_from_leads(leads):
+    """Daily funnel counts (one row per arrival date and source) derived from a lead-level sheet."""
+    if leads is None or leads.empty or "Date" not in leads.columns or "Stage" not in leads.columns:
+        return None
+    df = leads.dropna(subset=["Date"]).copy()
+    if df.empty:
+        return None
+    rank = df["Stage"].map(LEAD_STAGE_RANK).fillna(-1)
+    out = pd.DataFrame({"Date": df["Date"].dt.normalize(), "Total Leads": 1})
+    if "Source" in df.columns:
+        out["Source"] = df["Source"].astype(str).str.strip().replace("", "Unknown")
+    for threshold, column in RANK_TO_FUNNEL.items():
+        out[column] = (rank >= threshold).astype(int)
+    keys = [c for c in ("Date", "Source") if c in out.columns]
+    return out.groupby(keys, as_index=False).sum().sort_values("Date").reset_index(drop=True)
+
+
+def _metrics_sheet(sheet):
+    try:
+        return metrics_from_sheet(pd.DataFrame(sheet.worksheet("Metrics").get_all_records()))
+    except gspread.exceptions.WorksheetNotFound:
+        return None
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def load_from_sheets(spreadsheet_url):
+    """Metrics is optional: without it the funnel is derived from Daily, or from the lead-level Leads sheet."""
     if not GOOGLE_SHEETS_AVAILABLE:
         raise RuntimeError("gspread is not installed.")
     sheet = _sheets_client().open_by_url(spreadsheet_url)
-    metrics = metrics_from_sheet(pd.DataFrame(sheet.worksheet("Metrics").get_all_records()))
+    metrics = _metrics_sheet(sheet)
     leads = _optional_worksheet(sheet, "Leads", [], date_cols=("Date", "Last Contact"))
     if leads is not None and "Stage" in leads.columns:
         leads["Stage"] = leads["Stage"].astype(str).str.strip().str.title()
+    daily = _optional_worksheet(sheet, "Daily", DAILY_NUMERIC)
+    if not has_funnel_columns(daily):
+        daily = daily_from_leads(leads)
+    if not metrics or not any(metrics.values()):
+        if has_funnel_columns(daily):
+            metrics = metrics_from_daily(daily)
+        else:
+            raise RuntimeError("Add at least one of the worksheets Metrics, Daily or Leads.")
     return DataBundle(
         metrics=metrics,
-        daily=_optional_worksheet(sheet, "Daily", DAILY_NUMERIC),
+        daily=daily,
         whatsapp=_optional_worksheet(sheet, "WhatsApp", WHATSAPP_NUMERIC),
         leads=leads,
         loaded_at=datetime.now(),
