@@ -158,6 +158,12 @@ def build_ai_context(bundle, period_label, metrics, steps, temp, whatsapp, sourc
         weekly = totals.set_index("Date").resample("W-SUN").sum(numeric_only=True).reset_index()
         weekly["Date"] = weekly["Date"].dt.strftime("week ending %Y-%m-%d")
         ctx["weekly_totals"] = weekly.to_dict("records")
+    pipeline = data.lead_pipeline(bundle.leads)
+    if pipeline:
+        lost = data.outcome_reasons(bundle.leads, "Lost")
+        ctx["lead_sheet"] = {"leads_by_current_stage": pipeline["by_stage"],
+                             "recency_measured_as_of": data.latest_activity(bundle.leads, today).isoformat(),
+                             "lost_reasons": lost.to_dict() if lost is not None else {}}
     if scored is not None:
         hottest = scored.sort_values("Score", ascending=False).head(10)
         ctx["open_leads"] = {
@@ -180,41 +186,47 @@ def section_insight(name):
         ui.insight(cached["data"].get(name))
 
 
-def render_overview(metrics, prev, totals, temp, spend):
+SHORT_STAGE = {"Total Leads": "Leads", "Qualified Leads": "Qualified", "Viewings Scheduled": "Viewings booked",
+               "Viewings Completed": "Viewings done", "Offers Made": "Offers", "Offers Accepted": "Accepted",
+               "Closed Sales": "Closed"}
+
+
+def render_overview(metrics, prev, totals, temp, spend, pipeline):
     total, qualified = metrics["Total Leads"], metrics["Qualified Leads"]
     closed, viewings = metrics["Closed Sales"], metrics["Viewings Completed"]
+    active = data.active_stages(metrics)
     prev = prev or {}
 
-    cols = st.columns(6)
-    with cols[0]:
-        avg = f"{total / len(totals):.1f}/day · " if totals is not None and len(totals) else ""
-        ui.kpi("Leads", f"{total:,}", avg + change_note(total, prev.get("Total Leads")))
-    with cols[1]:
-        ui.kpi("Qualified", f"{data.pct(qualified, total):.1f}%", f"{qualified:,} leads")
-    with cols[2]:
-        ui.kpi("Viewings", f"{viewings:,}", f"{data.pct(viewings, qualified):.0f}% of qualified")
-    with cols[3]:
-        ui.kpi("Closed sales", f"{closed:,}", change_note(closed, prev.get("Closed Sales"))
-               or f"{data.pct(closed, total):.1f}% close rate")
-    with cols[4]:
-        ui.kpi("Close rate", f"{data.pct(closed, total):.2f}%", f"target {brand.targets.get('Close Rate', 0)}%")
-    with cols[5]:
-        if spend:
-            ui.kpi("Cost per lead", f"{brand.currency}{spend / total:,.0f}" if total else "–",
-                   f"{brand.currency}{spend / closed:,.0f} per sale" if closed else "")
-        else:
-            ui.kpi("Lead quality", f"{temp['quality_score']:.2f} / 3", "weighted Hot/Warm/Cold")
+    avg = f"{total / len(totals):.1f}/day · " if totals is not None and len(totals) else ""
+    kpis = [("Leads", f"{total:,}", avg + change_note(total, prev.get("Total Leads"))),
+            ("Qualified", f"{data.pct(qualified, total):.1f}%", f"{qualified:,} leads")]
+    if "Closed Sales" in active:
+        kpis += [("Viewings", f"{viewings:,}", f"{data.pct(viewings, qualified):.0f}% of qualified"),
+                 ("Closed sales", f"{closed:,}", change_note(closed, prev.get("Closed Sales"))
+                  or f"{data.pct(closed, total):.1f}% close rate"),
+                 ("Close rate", f"{data.pct(closed, total):.2f}%", f"target {brand.targets.get('Close Rate', 0)}%")]
+    elif pipeline:
+        stages = pipeline["by_stage"]
+        lost, new = stages.get("Lost", 0), stages.get("New", 0)
+        kpis += [("Contacted", f"{pipeline['total'] - new:,}", f"{data.pct(pipeline['total'] - new, total):.0f}% of leads"),
+                 ("Lost", f"{lost:,}", f"{data.pct(lost, total):.0f}% of leads"),
+                 ("Still open", f"{total - lost:,}", f"{data.pct(total - lost, total):.0f}% of leads")]
+    if spend:
+        kpis.append(("Cost per lead", f"{brand.currency}{spend / total:,.0f}" if total else "–",
+                     f"{brand.currency}{spend / closed:,.0f} per sale" if closed else ""))
+    else:
+        kpis.append(("Lead quality", f"{temp['quality_score']:.2f} / 3", "weighted Hot/Warm/Cold"))
+    for col, (label, value, note) in zip(st.columns(len(kpis)), kpis):
+        with col:
+            ui.kpi(label, value, note)
 
     st.markdown("#### Funnel at a glance")
-    ui.flow([
-        ("Leads", total, data.pct(qualified, total)),
-        ("Qualified", qualified, data.pct(metrics["Viewings Scheduled"], qualified)),
-        ("Viewings booked", metrics["Viewings Scheduled"], data.pct(viewings, metrics["Viewings Scheduled"])),
-        ("Viewings done", viewings, data.pct(metrics["Offers Made"], viewings)),
-        ("Offers", metrics["Offers Made"], data.pct(metrics["Offers Accepted"], metrics["Offers Made"])),
-        ("Accepted", metrics["Offers Accepted"], data.pct(closed, metrics["Offers Accepted"])),
-        ("Closed", closed, None),
-    ], final=("Close rate", f"{data.pct(closed, total):.1f}%"))
+    chips = [(SHORT_STAGE[stage], metrics[stage],
+              data.pct(metrics[active[i + 1]], metrics[stage]) if i + 1 < len(active) else None)
+             for i, stage in enumerate(active)]
+    last = active[-1]
+    ui.flow(chips, final=("Close rate", f"{data.pct(closed, total):.1f}%") if last == "Closed Sales"
+            else (f"{SHORT_STAGE[last]} rate", f"{data.pct(metrics[last], total):.1f}%"))
     section_insight("overview")
 
     st.markdown("#### Priority actions")
@@ -227,11 +239,12 @@ def render_overview(metrics, prev, totals, temp, spend):
 
 
 def render_targets(metrics):
-    actuals = {
-        "Qualification Rate": data.pct(metrics["Qualified Leads"], metrics["Total Leads"]),
-        "Viewing → Offer": data.pct(metrics["Offers Made"], metrics["Viewings Completed"]),
-        "Close Rate": data.pct(metrics["Closed Sales"], metrics["Total Leads"]),
-    }
+    active = data.active_stages(metrics)
+    actuals = {"Qualification Rate": data.pct(metrics["Qualified Leads"], metrics["Total Leads"])}
+    if "Offers Made" in active:
+        actuals["Viewing → Offer"] = data.pct(metrics["Offers Made"], metrics["Viewings Completed"])
+    if "Closed Sales" in active:
+        actuals["Close Rate"] = data.pct(metrics["Closed Sales"], metrics["Total Leads"])
     lines = []
     for name, target in brand.targets.items():
         value = actuals.get(name)
@@ -242,18 +255,19 @@ def render_targets(metrics):
         st.markdown("\n\n".join(lines))
 
 
-def render_funnel(metrics, steps):
+def render_funnel(metrics, steps, leads):
+    active = data.active_stages(metrics)
     section_insight("funnel")
     left, right = st.columns([3, 2])
     with left:
         fig = go.Figure(go.Funnel(
-            y=data.FUNNEL_STAGES, x=[metrics[s] for s in data.FUNNEL_STAGES],
+            y=active, x=[metrics[s] for s in active],
             textinfo="value+percent initial",
             marker={"color": [brand.primary_color, brand.secondary_color, "#9f7aea", "#4facfe",
-                              "#00b8d9", "#38b2ac", ui.GOOD]},
+                              "#00b8d9", "#38b2ac", ui.GOOD][:len(active)]},
             connector={"line": {"color": "rgba(128,128,128,.4)", "dash": "dot"}},
         ))
-        ui.chart(fig, "funnel", height=360, legend=False)
+        ui.chart(fig, "funnel", height=max(200, 70 * len(active)), legend=False)
     with right:
         colors = [ui.BAD if s["rate"] < 30 else ui.WARM if s["rate"] < 70 else ui.GOOD for s in steps]
         fig = go.Figure(go.Bar(
@@ -263,7 +277,7 @@ def render_funnel(metrics, steps):
         ))
         fig.update_layout(title="Step conversion (red < 30% · amber 30–70% · green > 70%)",
                           xaxis=dict(range=[0, 110], title=None), yaxis=dict(autorange="reversed"))
-        ui.chart(fig, "step_rates", height=360, legend=False)
+        ui.chart(fig, "step_rates", height=max(200, 70 * len(active)), legend=False)
 
     worst = data.bottlenecks(metrics)
     if worst:
@@ -275,9 +289,46 @@ def render_funnel(metrics, steps):
         with c2:
             st.markdown("\n".join(f"- {tip}" for tip in data.STAGE_PLAYBOOK[w["stage"]]))
     render_targets(metrics)
+    render_lead_outcomes(leads, active)
 
 
-def render_scoring(temp, scored, ai_scored, today):
+def reason_chart(reasons, title, key, color):
+    top = reasons.head(8).sort_values()
+    fig = go.Figure(go.Bar(x=top.values, y=top.index, orientation="h", marker_color=color,
+                           text=top.values, textposition="outside"))
+    fig.update_layout(title=title, xaxis=dict(title=None), yaxis=dict(title=None))
+    ui.chart(fig, key, height=max(220, 44 * len(top) + 80), legend=False)
+
+
+def render_lead_outcomes(leads, active):
+    """Where leads are now and why they were lost, from the lead-level sheet."""
+    pipeline = data.lead_pipeline(leads)
+    if not pipeline:
+        return
+    st.divider()
+    st.markdown("### Where leads are now")
+    if len(active) < len(data.FUNNEL_STAGES):
+        st.caption("The sheet only tracks the early stages of the pipeline, so the funnel above stops at "
+                   f"**{active[-1]}**. Later stages appear automatically once leads reach them.")
+    stages = pipeline["by_stage"]
+    colors = {"Lost": ui.BAD, "Closed": ui.GOOD}
+    fig = go.Figure(go.Bar(x=list(stages), y=list(stages.values()), text=list(stages.values()),
+                           textposition="outside",
+                           marker_color=[colors.get(st_, brand.primary_color) for st_ in stages]))
+    fig.update_layout(title="Leads by current stage", yaxis=dict(title=None))
+    left, right = st.columns(2)
+    with left:
+        ui.chart(fig, "lead_stage_mix", height=320, legend=False)
+    lost = data.outcome_reasons(leads, "Lost")
+    with right:
+        if lost is not None:
+            reason_chart(lost, "Why leads were lost", "lost_reasons", ui.BAD)
+    contacted = data.outcome_reasons(leads, "Contacted")
+    if contacted is not None:
+        reason_chart(contacted, "Latest outcome of contacted leads", "contacted_reasons", brand.primary_color)
+
+
+def render_scoring(temp, scored, ai_scored, as_of, today):
     with st.expander("How is lead scoring calculated?"):
         st.markdown("""
 - **Hot** – ready to transact soon: viewing done and in the offer stage, or a strong buying signal in their last message.
@@ -293,6 +344,9 @@ reading the lead's last message, and explains every score.
 The **quality score** is (Hot × 3 + Warm × 2 + Cold × 1) ÷ leads, from 1.0 (all cold) to 3.0 (all hot).
 """)
     section_insight("scoring")
+    if as_of != today:
+        st.caption(f"Recency is measured as of **{as_of:%d %b %Y}**, the latest activity in the Leads sheet, "
+                   f"so months-old leads are not all marked Cold. Today is {today:%d %b %Y}.")
 
     total = temp["hot"] + temp["warm"] + temp["cold"]
     cols = st.columns(4)
@@ -324,7 +378,7 @@ The **quality score** is (Hot × 3 + Warm × 2 + Cold × 1) ÷ leads, from 1.0 (
             with st.spinner("Claude is reading every lead…"):
                 try:
                     st.session_state.lead_ai = {"key": lead_fingerprint(scored),
-                                                "data": ai.score_leads(brand, lead_records(scored), today)}
+                                                "data": ai.score_leads(brand, lead_records(scored), as_of)}
                     st.rerun()
                 except ai.AIError as e:
                     st.error(str(e))
@@ -388,8 +442,12 @@ def render_channels(whatsapp_df, whatsapp, sources):
         st.markdown("### Lead sources")
         left, right = st.columns([3, 2])
         with left:
+            shown = sources.drop(columns=[c for c in ("Closed", "Close %", "Spend", "Cost / Lead", "Hot leads")
+                                          if c in sources.columns and not sources[c].fillna(0).any()])
+            if shown["Quality Score"].nunique() <= 1:
+                shown = shown.drop(columns="Quality Score")
             st.dataframe(
-                sources, hide_index=True, width="stretch",
+                shown, hide_index=True, width="stretch",
                 column_config={
                     "Qualified %": st.column_config.NumberColumn(format="%.1f%%"),
                     "Close %": st.column_config.NumberColumn(format="%.2f%%"),
@@ -527,6 +585,8 @@ def main():
         ui.header(brand, period_label, bundle.loaded_at, bundle.source)
         if note:
             st.info(note)
+        for warning in bundle.notes:
+            st.warning(warning)
 
     daily = in_range(bundle.daily, date_range)
     metrics = bundle.metrics if date_range is None else data.metrics_from_daily(daily)
@@ -541,7 +601,9 @@ def main():
                     for c in data.WHATSAPP_NUMERIC}
 
     steps = data.conversion_steps(metrics)
-    scored = data.score_leads(bundle.leads, today)
+    pipeline = data.lead_pipeline(bundle.leads)
+    as_of = data.latest_activity(bundle.leads, today)
+    scored = data.score_leads(bundle.leads, as_of)
     ai_scored = False
     if scored is not None:
         scored, ai_scored = apply_ai_scores(scored)
@@ -582,11 +644,11 @@ def main():
 
     tabs = st.tabs(["Overview", "Funnel", "Lead Scoring", "Channels", "Trends", "Ask AI"])
     with tabs[0]:
-        render_overview(metrics, prev, totals, temp, spend)
+        render_overview(metrics, prev, totals, temp, spend, pipeline)
     with tabs[1]:
-        render_funnel(metrics, steps)
+        render_funnel(metrics, steps, bundle.leads)
     with tabs[2]:
-        render_scoring(temp, scored, ai_scored, today)
+        render_scoring(temp, scored, ai_scored, as_of, today)
     with tabs[3]:
         render_channels(whatsapp_df, whatsapp, sources)
     with tabs[4]:
