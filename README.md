@@ -34,7 +34,9 @@ safety classifier, the API retries it on Anthropic's recommended fallback model)
 
 ## Google Sheets format
 
-Share the spreadsheet with the service account email. Only `Metrics` is required.
+Share the spreadsheet with the service account email. Provide at least one of `Metrics`, `Daily` or `Leads`:
+without `Metrics` the funnel is derived from `Daily`, and without `Daily` from `Leads` (each lead counts for
+every stage up to the one it has reached; `Lost` leads count only as leads).
 
 **Metrics** – totals used for "All time"
 
