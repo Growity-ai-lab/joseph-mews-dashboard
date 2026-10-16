@@ -29,7 +29,7 @@ h4 {{ font-size: 1rem !important; margin: .3rem 0 .3rem !important; }}
   gap: .75rem; padding-bottom: .8rem; margin-bottom: .8rem; border-bottom: 1px solid rgba(128,128,128,.2); }}
 .jm-brand {{ display: flex; align-items: center; gap: .8rem; }}
 .jm-brand img {{ height: 42px; }}
-.jm-name {{ font-size: 1.85rem; font-weight: 700; letter-spacing: .5px; line-height: 1.1;
+.jm-name {{ font-size: 1.85rem; font-weight: 700; letter-spacing: .5px; line-height: 1.35; padding: .15em 0 .05em;
   background: linear-gradient(135deg, {a} 0%, {rgba(a, .75)} 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }}
 .jm-tagline {{ font-size: .9rem; opacity: .7; }}

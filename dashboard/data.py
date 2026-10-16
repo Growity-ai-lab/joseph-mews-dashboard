@@ -6,7 +6,7 @@ emails or phone numbers (GDPR).
 import json
 import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -89,6 +89,7 @@ class DataBundle:
     leads: pd.DataFrame | None
     loaded_at: datetime
     source: str  # "sheets" or "demo"
+    notes: list = field(default_factory=list)  # data-quality warnings shown to the user
 
 
 # --------------------------------------------------------------------------- #
@@ -188,6 +189,18 @@ def daily_from_leads(leads):
     return out.groupby(keys, as_index=False).sum().sort_values("Date").reset_index(drop=True)
 
 
+def _drop_future(df, sheet_name, notes):
+    """Rows dated after today are data-entry errors; drop them and tell the user."""
+    if df is None or "Date" not in df.columns:
+        return df
+    future = df["Date"] > pd.Timestamp(date.today())
+    if future.any():
+        notes.append(f"{int(future.sum())} rows in the {sheet_name} sheet are dated in the future "
+                     f"(latest {df.loc[future, 'Date'].max():%d %b %Y}) and were ignored. Please check the dates.")
+        return df[~future].reset_index(drop=True)
+    return df
+
+
 def _metrics_sheet(sheet):
     try:
         return metrics_from_sheet(pd.DataFrame(sheet.worksheet("Metrics").get_all_records()))
@@ -205,7 +218,9 @@ def load_from_sheets(spreadsheet_url):
     leads = _optional_worksheet(sheet, "Leads", [], date_cols=("Date", "Last Contact"))
     if leads is not None and "Stage" in leads.columns:
         leads["Stage"] = leads["Stage"].astype(str).str.strip().str.title()
-    daily = _optional_worksheet(sheet, "Daily", DAILY_NUMERIC)
+    notes = []
+    leads = _drop_future(leads, "Leads", notes)
+    daily = _drop_future(_optional_worksheet(sheet, "Daily", DAILY_NUMERIC), "Daily", notes)
     if not has_funnel_columns(daily):
         daily = daily_from_leads(leads)
     if not metrics or not any(metrics.values()):
@@ -220,6 +235,7 @@ def load_from_sheets(spreadsheet_url):
         leads=leads,
         loaded_at=datetime.now(),
         source="sheets",
+        notes=notes,
     )
 
 
@@ -366,9 +382,18 @@ def pct(numerator, denominator):
     return numerator / denominator * 100 if denominator else 0.0
 
 
+def active_stages(metrics):
+    """Funnel stages up to the last one that has any leads (later stages are not tracked yet)."""
+    last = max((i for i, stage in enumerate(FUNNEL_STAGES) if metrics.get(stage, 0)), default=1)
+    return FUNNEL_STAGES[:max(last, 1) + 1]
+
+
 def conversion_steps(metrics):
     steps = []
+    active = active_stages(metrics)
     for label, src, dst in CONVERSION_STEPS:
+        if dst not in active:
+            continue
         start, end = metrics.get(src, 0), metrics.get(dst, 0)
         steps.append({"stage": label, "from": start, "to": end,
                       "rate": pct(end, start), "drop_off": max(start - end, 0)})
@@ -377,6 +402,33 @@ def conversion_steps(metrics):
 
 def bottlenecks(metrics):
     return sorted((s for s in conversion_steps(metrics) if s["from"] > 0), key=lambda s: s["rate"])
+
+
+def latest_activity(leads, today):
+    """Reference date for lead recency: today, or the latest activity in the sheet when the data is older."""
+    if leads is None or leads.empty:
+        return today
+    dates = pd.concat([leads[c] for c in ("Date", "Last Contact") if c in leads.columns]).dropna()
+    dates = dates[dates <= pd.Timestamp(today)]
+    return min(today, dates.max().date()) if len(dates) else today
+
+
+def lead_pipeline(leads):
+    """Where every lead currently is, plus why leads were lost (parsed from 'reason | Stage' last messages)."""
+    if leads is None or leads.empty or "Stage" not in leads.columns:
+        return None
+    by_stage = leads["Stage"].value_counts()
+    return {"total": len(leads), "by_stage": {st_: int(by_stage.get(st_, 0)) for st_ in LEAD_STAGES if by_stage.get(st_, 0)}}
+
+
+def outcome_reasons(leads, stage):
+    """Counts of the reason recorded in the last message for leads currently in `stage`."""
+    if leads is None or "Stage" not in leads.columns or "Last Message" not in leads.columns:
+        return None
+    msgs = leads.loc[leads["Stage"] == stage, "Last Message"].astype(str).str.strip()
+    reasons = msgs.map(lambda m: m.rsplit("|", 1)[0].strip() if "|" in m else "")
+    reasons = reasons.replace("", "No reason recorded").value_counts()
+    return reasons if len(reasons) and not (len(reasons) == 1 and reasons.index[0] == "No reason recorded") else None
 
 
 def funnel_temperature(metrics):
