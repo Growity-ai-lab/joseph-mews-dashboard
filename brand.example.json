@@ -12,5 +12,22 @@
     "Qualification Rate": 30,
     "Viewing → Offer": 40,
     "Close Rate": 2.5
+  },
+  "lead_rules": {
+    "hot_phrases": [
+      "tuna arayacak"
+    ],
+    "warm_phrases": [
+      "bilgi",
+      "tarih",
+      "tekrar",
+      "randevu"
+    ],
+    "cold_phrases": [
+      "cevap vermiyor",
+      "ulasilamadi",
+      "ulasilamiyor",
+      "ulasamadik"
+    ]
   }
 }

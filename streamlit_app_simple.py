@@ -102,37 +102,14 @@ def fingerprint(obj):
     return hashlib.md5(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def apply_ai_scores(scored):
-    """Overlay Claude's per-lead scores (if generated for these exact leads) on the rule-based scores."""
-    scored["Scored by"] = "Rules"
-    cached = st.session_state.get("lead_ai")
-    if not cached or cached["key"] != lead_fingerprint(scored):
-        return scored, False
-    results = cached["data"]
-    scored["Reason"], scored["Next Action"] = "", ""
-    for i, lead_id in scored["Lead ID"].items():
-        result = results.get(str(lead_id))
-        if result:
-            scored.at[i, "Score"] = result["score"]
-            scored.at[i, "Temperature"] = result["temperature"]
-            scored.at[i, "Reason"] = result["reason"]
-            scored.at[i, "Next Action"] = result["next_action"]
-            scored.at[i, "Scored by"] = "Claude"
-    return scored, True
-
-
 def lead_records(scored, limit=80):
-    cols = {"Lead ID": "lead_id", "Stage": "stage", "Source": "source", "Budget": "budget",
+    cols = {"Lead ID": "lead_id", "Stage": "stage", "Budget": "budget", "Outcome": "outcome",
             "Days Since Contact": "days_since_contact", "Last Message": "last_message", "Date": "created"}
     present = [c for c in cols if c in scored.columns]
     records = scored.head(limit)[present].rename(columns=cols)
     if "created" in records.columns:
         records["created"] = records["created"].dt.strftime("%Y-%m-%d")
     return records.to_dict("records")
-
-
-def lead_fingerprint(scored):
-    return fingerprint(lead_records(scored))
 
 
 def build_ai_context(bundle, period_label, metrics, steps, temp, whatsapp, sources, totals, scored, today):
@@ -333,25 +310,24 @@ def render_lead_outcomes(leads, active):
         reason_chart(contacted, "Latest outcome of contacted leads", "contacted_reasons", brand.primary_color)
 
 
-def render_scoring(temp, scored, ai_scored, as_of, today):
+def render_scoring(temp, scored):
     with st.expander("How is lead scoring calculated?"):
-        st.markdown("""
-- **Hot** – ready to transact soon: viewing done and in the offer stage, or a strong buying signal in their last message.
-- **Warm** – qualified and engaged (viewings booked or done) but still needs nurturing.
-- **Cold** – early stage or gone quiet: new, not yet qualified, or no contact for weeks.
+        rules = brand.lead_rules
+        st.markdown(f"""
+Every open lead is placed in one group from its **stage** and the **outcome noted in its last message**.
 
-**With a `Leads` worksheet** every open lead gets a 0–100 score: a base score for its stage
-(New 10 → Offer Accepted 95), +10 if contacted in the last 3 days, −10 after 10 days and −20 after
-21 days of silence. Hot ≥ 70, Warm 40–69, Cold < 40. **Score with Claude** re-scores each lead by also
-reading the lead's last message, and explains every score.
+- **Hot** – stage Qualified or later (reached, spoke, asked for a meeting), or a promised callback
+  (`{"`, `".join(rules["hot_phrases"])}`).
+- **Warm** – Contacted, and asked for information or was given a callback date
+  (messages containing `{"`, `".join(rules["warm_phrases"])}`).
+- **Cold** – New leads, no answer or unreachable
+  (`{"`, `".join(rules["cold_phrases"])}`), and contacted leads with no outcome recorded yet.
 
-**Without a `Leads` worksheet** the split is estimated from the funnel counts.
-The **quality score** is (Hot × 3 + Warm × 2 + Cold × 1) ÷ leads, from 1.0 (all cold) to 3.0 (all hot).
+Lost leads are not scored. The **quality score** is (Hot × 3 + Warm × 2 + Cold × 1) ÷ leads, from 1.0 (all cold)
+to 3.0 (all hot). Without a `Leads` worksheet the split is estimated from the funnel counts. The phrases can be
+changed in `brand.json` (`lead_rules`).
 """)
     section_insight("scoring")
-    if as_of != today:
-        st.caption(f"Recency is measured as of **{as_of:%d %b %Y}**, the latest activity in the Leads sheet, "
-                   f"so months-old leads are not all marked Cold. Today is {today:%d %b %Y}.")
 
     total = temp["hot"] + temp["warm"] + temp["cold"]
     cols = st.columns(4)
@@ -367,45 +343,26 @@ The **quality score** is (Hot × 3 + Warm × 2 + Cold × 1) ÷ leads, from 1.0 (
                             ui.GOOD if q >= 2.0 else ui.WARM if q >= 1.5 else ui.BAD)
 
     if scored is None:
-        st.info("Add a **Leads** worksheet (Lead ID, Date, Source, Stage, Budget, Last Contact, Last Message) "
-                "to score every open lead individually and let Claude prioritise them. Use pseudonymous IDs only.")
+        st.info("Add a **Leads** worksheet (Lead ID, Date, Stage, Last Contact, Last Message) to score open "
+                "leads from their real outcomes. Use pseudonymous IDs only.")
         return
 
-    st.markdown("#### Open leads by stage")
-    c1, c2 = st.columns([3, 2])
-    with c1:
-        st.caption(f"{len(scored)} open leads across all dates · "
-                   + ("scored by Claude from stage, recency, budget and the lead's last message" if ai_scored
-                      else "rule-based scores · use Claude for message-aware scoring"))
-    with c2:
-        if st.button("Score leads with Claude", disabled=not ai.is_configured(),
-                     help=None if ai.is_configured() else AI_DISABLED_HELP, width="stretch"):
-            with st.spinner("Claude is reading every lead…"):
-                try:
-                    st.session_state.lead_ai = {"key": lead_fingerprint(scored),
-                                                "data": ai.score_leads(brand, lead_records(scored), as_of)}
-                    st.rerun()
-                except ai.AIError as e:
-                    st.error(str(e))
+    st.markdown("#### What each group is made of")
+    outcomes = (scored.groupby(["Outcome", "Temperature"]).size().reset_index(name="Leads")
+                .sort_values("Leads"))
+    colors = {"Hot": ui.HOT, "Warm": ui.WARM, "Cold": ui.COLD}
+    fig = go.Figure(go.Bar(
+        x=outcomes["Leads"], y=outcomes["Outcome"], orientation="h", text=outcomes["Leads"], textposition="outside",
+        marker_color=[colors[t] for t in outcomes["Temperature"]],
+        customdata=outcomes["Temperature"], hovertemplate="%{y}: %{x} leads (%{customdata})<extra></extra>"))
+    fig.update_layout(title="Open leads by outcome (colour = Hot, Warm or Cold)", xaxis=dict(title=None),
+                      yaxis=dict(title=None))
+    ui.chart(fig, "scoring_outcomes", height=max(260, 56 * len(outcomes) + 90), legend=False)
 
-    by_stage = (scored.groupby(["Stage", "Temperature"]).size().unstack(fill_value=0)
-                .reindex(columns=["Hot", "Warm", "Cold"], fill_value=0))
-    order = [st_ for st_ in list(data.STAGE_POINTS) if st_ in by_stage.index]
-    by_stage = by_stage.loc[order]
-    fig = go.Figure()
-    for label, color in (("Hot", ui.HOT), ("Warm", ui.WARM), ("Cold", ui.COLD)):
-        fig.add_bar(x=by_stage.index, y=by_stage[label], name=label, marker_color=color)
-    fig.update_layout(barmode="stack", title="Hot, Warm and Cold leads at each stage")
-    ui.chart(fig, "scoring_by_stage", height=340)
-
-    if "Source" in scored.columns and scored["Source"].notna().any():
-        by_source = (scored.groupby(["Source", "Temperature"]).size().unstack(fill_value=0)
-                     .reindex(columns=["Hot", "Warm", "Cold"], fill_value=0))
-        by_source["Hot share"] = (by_source["Hot"] / by_source.sum(axis=1) * 100).round(0)
-        st.markdown("#### Lead temperature by source")
-        st.dataframe(by_source.sort_values("Hot share", ascending=False).reset_index(), hide_index=True,
-                     width="stretch",
-                     column_config={"Hot share": st.column_config.NumberColumn("Hot share", format="%d%%")})
+    waiting = scored[scored["Outcome"].isin(["Contacted, no outcome recorded", "No answer or unreachable"])]
+    if len(waiting):
+        st.caption(f"**{len(waiting):,} contacted leads** have no outcome, or could not be reached. Recording an "
+                   "outcome for them in the Last Message column moves them into Warm or Hot.")
 
 
 def render_channels(whatsapp_df, whatsapp, sources):
@@ -608,17 +565,15 @@ def main():
     steps = data.conversion_steps(metrics)
     pipeline = data.lead_pipeline(bundle.leads)
     as_of = data.latest_activity(bundle.leads, today)
-    scored = data.score_leads(bundle.leads, as_of)
-    ai_scored = False
+    scored = data.score_leads(bundle.leads, as_of, brand.lead_rules)
     if scored is not None:
-        scored, ai_scored = apply_ai_scores(scored)
         counts = scored["Temperature"].value_counts()
         hot, warm, cold = (int(counts.get(t, 0)) for t in ("Hot", "Warm", "Cold"))
         temp = {
             "hot": hot, "warm": warm, "cold": cold,
             "quality_score": (hot * 3 + warm * 2 + cold) / len(scored),
             "basis": "open leads",
-            "method": "scored by Claude" if ai_scored else "rule-based per-lead score",
+            "method": "rule-based: stage plus the outcome noted in the last message",
             "notes": {"Hot": "ready to transact", "Warm": "needs nurturing", "Cold": "early or quiet"},
         }
     else:
@@ -647,18 +602,21 @@ def main():
             except ai.AIError as e:
                 st.error(str(e))
 
-    tabs = st.tabs(["Overview", "Funnel", "Lead Scoring", "Channels", "Trends", "Ask AI"])
-    with tabs[0]:
+    has_channels = bool(whatsapp) or sources is not None
+    names = ["Overview", "Funnel", "Lead Scoring", *(["Channels"] if has_channels else []), "Trends", "Ask AI"]
+    tab = dict(zip(names, st.tabs(names)))
+    with tab["Overview"]:
         render_overview(metrics, prev, totals, temp, spend, pipeline)
-    with tabs[1]:
+    with tab["Funnel"]:
         render_funnel(metrics, steps, bundle.leads)
-    with tabs[2]:
-        render_scoring(temp, scored, ai_scored, as_of, today)
-    with tabs[3]:
-        render_channels(whatsapp_df, whatsapp, sources)
-    with tabs[4]:
+    with tab["Lead Scoring"]:
+        render_scoring(temp, scored)
+    if has_channels:
+        with tab["Channels"]:
+            render_channels(whatsapp_df, whatsapp, sources)
+    with tab["Trends"]:
         render_trends(totals, scored)
-    with tabs[5]:
+    with tab["Ask AI"]:
         render_chat(context)
 
     ui.footer(brand, datetime.now().year)

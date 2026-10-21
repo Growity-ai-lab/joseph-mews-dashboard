@@ -21,11 +21,19 @@ class Brand:
     logo_url: str = ""
     currency: str = "£"
     lead_id_prefix: str = "JM"
-    # Targets shown on the Funnel & Scoring tab, in percent
+    # Targets shown on the Funnel tab, in percent
     targets: dict = field(default_factory=lambda: {
         "Qualification Rate": 30.0,
         "Viewing → Offer": 40.0,
         "Close Rate": 2.5,
+    })
+    # Lead temperature rules. Phrases are matched against the Last Message of open leads, ignoring case and
+    # accents. Hot: stage Qualified or later, or a hot phrase. Warm: a Contacted lead with a warm phrase.
+    # Everything else (New, no answer, unreachable, no recorded outcome) is Cold.
+    lead_rules: dict = field(default_factory=lambda: {
+        "hot_phrases": ["tuna arayacak"],
+        "warm_phrases": ["bilgi", "tarih", "tekrar", "randevu"],
+        "cold_phrases": ["cevap vermiyor", "ulasilamadi", "ulasilamiyor", "ulasamadik"],
     })
 
 
