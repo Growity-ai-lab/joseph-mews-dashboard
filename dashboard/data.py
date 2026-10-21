@@ -181,8 +181,6 @@ def daily_from_leads(leads):
         return None
     rank = df["Stage"].map(LEAD_STAGE_RANK).fillna(-1)
     out = pd.DataFrame({"Date": df["Date"].dt.normalize(), "Total Leads": 1})
-    if "Source" in df.columns:
-        out["Source"] = df["Source"].astype(str).str.strip().replace("", "Unknown")
     for threshold, column in RANK_TO_FUNNEL.items():
         out[column] = (rank >= threshold).astype(int)
     keys = [c for c in ("Date", "Source") if c in out.columns]
@@ -253,27 +251,9 @@ DEMO_SOURCES = {
 }
 
 DEMO_MESSAGES = {
-    "hot": [
-        "We'd like to make an offer close to asking. What's the vendor's timeline?",
-        "Mortgage in principle is approved - we can move quickly on the right place.",
-        "Loved the second viewing. Can you send the lease length and service charge breakdown?",
-        "Could we see the penthouse again on Saturday with my architect?",
-        "Our sale has completed, so we're chain-free and ready to proceed.",
-    ],
-    "warm": [
-        "Can you send more photos of the garden and the floor plan?",
-        "Is there any flexibility on the price?",
-        "What's the parking situation for two cars?",
-        "We're relocating from Dubai in spring - can we do a video viewing?",
-        "Which schools are in the catchment area?",
-    ],
-    "cold": [
-        "Just browsing for now, maybe next year.",
-        "We've decided to rent for another year.",
-        "It's above our budget, unfortunately.",
-        "Too far from the office for us, sorry.",
-        "",
-    ],
+    "hot": ["Tuna Arayacak", "Tuna Arayacak", "Qualified"],
+    "warm": ["Bilgi Mesajı Gönderildi", "Tekrar Arama Tarihi Verildi", "Randevu Talep Etti"],
+    "cold": ["Cevap Vermiyor-Ulaşılamadı", "Cevap Vermiyor-Ulaşılamadı", "Contacted"],
 }
 
 DEMO_BUDGETS = ["£1M–£2M", "£2M–£3.5M", "£3.5M–£5M", "£5M+"]
@@ -478,16 +458,41 @@ def source_breakdown(daily, leads_scored=None):
     return pd.DataFrame(rows).sort_values("Quality Score", ascending=False).reset_index(drop=True)
 
 
-def temperature_from_score(score):
-    if score >= 70:
-        return "Hot"
-    if score >= 40:
-        return "Warm"
-    return "Cold"
+_ASCII = str.maketrans("çğıöşüÇĞİÖŞÜâîû", "cgiosucgiosuaiu")
 
 
-def score_leads(leads, today):
-    """Rule-based score for open leads: funnel stage plus recency of last contact."""
+def _plain(text):
+    return str(text).translate(_ASCII).lower()
+
+
+DEFAULT_LEAD_RULES = {
+    "hot_phrases": ["tuna arayacak"],
+    "warm_phrases": ["bilgi", "tarih", "tekrar", "randevu"],
+    "cold_phrases": ["cevap vermiyor", "ulasilamadi", "ulasilamiyor", "ulasamadik"],
+}
+TEMPERATURE_POINTS = {"Hot": 85, "Warm": 55, "Cold": 20}
+
+
+def classify_lead(stage, message, rules=None):
+    """(temperature, reason) for an open lead from its stage and the outcome noted in its last message."""
+    rules = rules or DEFAULT_LEAD_RULES
+    text = _plain(message)
+    has = lambda key: any(_plain(p) in text for p in rules.get(key, []))
+    if stage in LEAD_STAGES and LEAD_STAGES.index(stage) >= LEAD_STAGES.index("Qualified"):
+        return "Hot", "Qualified"
+    if stage == "New":
+        return "Cold", "New, not yet contacted"
+    if has("hot_phrases"):
+        return "Hot", "Callback promised"
+    if has("cold_phrases"):
+        return "Cold", "No answer or unreachable"
+    if has("warm_phrases"):
+        return "Warm", "Info requested or callback date given"
+    return "Cold", "Contacted, no outcome recorded"
+
+
+def score_leads(leads, today, rules=None):
+    """Temperature of every open lead: Hot / Warm / Cold from its stage and the outcome in its last message."""
     if leads is None or leads.empty or "Stage" not in leads.columns:
         return None
     df = leads[~leads["Stage"].isin(CLOSED_STAGES)].copy()
@@ -497,21 +502,10 @@ def score_leads(leads, today):
         df["Lead ID"] = [f"L-{i + 1}" for i in range(len(df))]
     df["Lead ID"] = df["Lead ID"].astype(str)
     last_contact = df["Last Contact"] if "Last Contact" in df.columns else df.get("Date")
-    today_ts = pd.Timestamp(today)
-    df["Days Since Contact"] = (today_ts - last_contact).dt.days.clip(lower=0) if last_contact is not None else None
-
-    def rule(row):
-        score = STAGE_POINTS.get(row["Stage"], 10)
-        days = row.get("Days Since Contact")
-        if pd.notna(days):
-            if days <= 3:
-                score += 10
-            elif days > 21:
-                score -= 20
-            elif days > 10:
-                score -= 10
-        return max(0, min(100, score))
-
-    df["Score"] = df.apply(rule, axis=1)
-    df["Temperature"] = df["Score"].map(temperature_from_score)
+    df["Days Since Contact"] = (pd.Timestamp(today) - last_contact).dt.days.clip(lower=0) if last_contact is not None else None
+    messages = df["Last Message"] if "Last Message" in df.columns else pd.Series("", index=df.index)
+    classified = [classify_lead(stage, msg, rules) for stage, msg in zip(df["Stage"], messages)]
+    df["Temperature"] = [t for t, _ in classified]
+    df["Outcome"] = [r for _, r in classified]
+    df["Score"] = df["Temperature"].map(TEMPERATURE_POINTS)
     return df.reset_index(drop=True)

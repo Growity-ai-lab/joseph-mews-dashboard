@@ -13,7 +13,7 @@ environment variables.
 |-----|----------|
 | **Overview** | KPI row with change vs the previous period, funnel at a glance, priority actions |
 | **Funnel** | Funnel chart, step conversion rates, biggest bottleneck with a playbook, targets |
-| **Lead Scoring** | Hot/Warm/Cold split, leads by stage and by source (aggregate, no per-lead table) |
+| **Lead Scoring** | Hot/Warm/Cold split from the stage and the outcome noted in the last message, and what each group is made of (aggregate, no per-lead table) |
 | **Channels** | WhatsApp conversion flow and conversation quality, performance by lead source |
 | **Trends** | Daily leads and sales with 7-day averages, lead mix over time, spend and cost per lead |
 | **Ask AI** | Chat with Claude about the figures on the dashboard |
@@ -28,8 +28,6 @@ safety classifier, the API retries it on Anthropic's recommended fallback model)
 `ANTHROPIC_API_KEY`; without it the buttons are disabled and everything else works.
 
 - **AI insights** – one request returns a short commentary for every tab plus the top three actions.
-- **Lead scoring with Claude** – re-scores each open lead from its stage, recency, budget and last
-  message; the dashboard shows the aggregate Hot/Warm/Cold picture.
 - **Ask AI** – questions about the current reporting period, answered from the dashboard data.
 
 ## Google Sheets format
@@ -85,6 +83,13 @@ Offer Accepted, Closed, Lost.
 
 For a client demo, either copy `brand.example.json` to `brand.json` and edit it, or set the `BRAND_*`
 variables. Add `?demo=1` to the URL to show demo data on a live deployment.
+
+### Lead scoring rules
+
+Open leads are grouped from their `Stage` and the outcome noted in `Last Message` (matched ignoring case and
+accents): **Hot** = stage Qualified or later, or a promised callback; **Warm** = Contacted with an information
+request or a callback date; **Cold** = New, no answer or unreachable, or no outcome recorded. The phrases are set
+in `lead_rules` in `brand.json`; see `brand.example.json`.
 
 ## Running locally
 

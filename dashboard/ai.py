@@ -1,4 +1,4 @@
-"""Claude-powered features: section insights, chat and lead scoring."""
+"""Claude-powered features: section insights and chat."""
 import json
 import os
 
@@ -130,40 +130,3 @@ def stream_chat(brand, context, history):
     )
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
     return _text_stream(system, messages, max_tokens=8000, effort="medium")
-
-
-def score_leads(brand, leads, today):
-    """Return {lead_id: {temperature, score, reason, next_action}} for the given lead records."""
-    system = (
-        f"You qualify inbound leads for {brand.name}, a {brand.industry} business. Today is {today:%d %B %Y}. "
-        "For each lead, judge purchase intent from its funnel stage, how recently we were in contact, its "
-        "budget band and, above all, what the lead last wrote to us. Hot = likely to transact in the next few "
-        "weeks; Warm = genuinely interested but needs nurturing; Cold = low intent or gone quiet. Give a score "
-        "from 0 to 100 consistent with the temperature. 'reason' is one short sentence citing the evidence; "
-        "'next_action' is one concrete step for the agent. Return every lead you are given, using its lead_id."
-    )
-    schema = {
-        "type": "object",
-        "properties": {
-            "leads": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "lead_id": {"type": "string"},
-                        "temperature": {"type": "string", "enum": ["Hot", "Warm", "Cold"]},
-                        "score": {"type": "integer"},
-                        "reason": {"type": "string"},
-                        "next_action": {"type": "string"},
-                    },
-                    "required": ["lead_id", "temperature", "score", "reason", "next_action"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-        "required": ["leads"],
-        "additionalProperties": False,
-    }
-    prompt = "<leads>\n" + "\n".join(json.dumps(lead, default=str) for lead in leads) + "\n</leads>"
-    result = _json_call(system, prompt, schema, max_tokens=16000, effort="low")
-    return {item["lead_id"]: item for item in result.get("leads", [])}
