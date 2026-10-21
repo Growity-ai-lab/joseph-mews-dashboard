@@ -227,6 +227,11 @@ def render_overview(metrics, prev, totals, temp, spend, pipeline):
     last = active[-1]
     ui.flow(chips, final=("Close rate", f"{data.pct(closed, total):.1f}%") if last == "Closed Sales"
             else (f"{SHORT_STAGE[last]} rate", f"{data.pct(metrics[last], total):.1f}%"))
+    if pipeline and len(active) < len(data.FUNNEL_STAGES):
+        st.markdown("#### Lead status")
+        palette = {"Lost": ui.BAD, "Closed": ui.GOOD, "Qualified": brand.secondary_color}
+        ui.status_row([(stage, count, palette.get(stage, brand.primary_color))
+                       for stage, count in pipeline["by_stage"].items()], pipeline["total"])
     section_insight("overview")
 
     st.markdown("#### Priority actions")

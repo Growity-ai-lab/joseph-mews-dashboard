@@ -21,7 +21,7 @@ def inject_css(brand):
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 html, body, [class*="css"], .stMarkdown, button, input {{ font-family: 'Inter', sans-serif; }}
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {{ display: none; }}
-.block-container {{ padding-top: 1.6rem; padding-bottom: 2rem; max-width: 1400px; }}
+.block-container {{ padding-top: 4.2rem; padding-bottom: 2rem; max-width: 1400px; }}
 h3 {{ font-size: 1.15rem !important; margin: .4rem 0 .4rem !important; }}
 h4 {{ font-size: 1rem !important; margin: .3rem 0 .3rem !important; }}
 
@@ -45,11 +45,16 @@ h4 {{ font-size: 1rem !important; margin: .3rem 0 .3rem !important; }}
 .jm-kpi-note {{ font-size: .75rem; opacity: .7; }}
 
 .jm-flow {{ display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .4rem 0 .8rem; }}
-.jm-step {{ border-radius: 10px; padding: .55rem .85rem; color: white; text-align: center; min-width: 110px;
+.jm-step {{ flex: 1 1 110px; border-radius: 10px; padding: .55rem .85rem; color: white; text-align: center; min-width: 110px;
   background: linear-gradient(135deg, {rgba(p, .95)} 0%, {rgba(s, .95)} 100%); }}
 .jm-step.final {{ background: linear-gradient(135deg, #10b981 0%, #0ea5a4 100%); }}
 .jm-step-label {{ font-size: .62rem; text-transform: uppercase; letter-spacing: .5px; opacity: .9; }}
 .jm-step-value {{ font-size: 1.25rem; font-weight: 700; }}
+.jm-status {{ flex: 1 1 130px; border: 1px solid; border-radius: 10px; padding: .6rem .85rem; }}
+.jm-status-value {{ font-size: 1.5rem; font-weight: 700; line-height: 1.2; }}
+.jm-status-note {{ font-size: .72rem; opacity: .7; margin-bottom: .35rem; }}
+.jm-status-bar {{ height: 4px; border-radius: 2px; background: rgba(128,128,128,.2); overflow: hidden; }}
+.jm-status-bar div {{ height: 100%; border-radius: 2px; }}
 .jm-arrow {{ font-size: .75rem; font-weight: 700; color: {p}; text-align: center; min-width: 46px; }}
 
 .jm-insight {{ border-left: 4px solid {p}; background: {rgba(p, .07)}; border-radius: 10px;
@@ -108,6 +113,18 @@ def flow(steps, final=None):
         parts.append(f'<div class="jm-step final"><div class="jm-step-label">{esc(label)}</div>'
                      f'<div class="jm-step-value">{esc(value)}</div></div>')
     st.markdown(f'<div class="jm-flow">{"".join(parts)}</div>', unsafe_allow_html=True)
+
+
+def status_row(items, total):
+    """Row of tinted status cards: [(label, count, color), ...] with each count's share of `total`."""
+    cards = "".join(
+        f'<div class="jm-status" style="border-color:{rgba(color, .55)};background:{rgba(color, .10)}">'
+        f'<div class="jm-step-label">{esc(label)}</div>'
+        f'<div class="jm-status-value" style="color:{color}">{count:,}</div>'
+        f'<div class="jm-status-note">{count / total * 100:.0f}% of leads</div>'
+        f'<div class="jm-status-bar"><div style="width:{count / total * 100:.1f}%;background:{color}"></div></div>'
+        f'</div>' for label, count, color in items)
+    st.markdown(f'<div class="jm-flow">{cards}</div>', unsafe_allow_html=True)
 
 
 def insight(text, title="AI insight"):
